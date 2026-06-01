@@ -31,25 +31,29 @@ export default function Header({ onRefresh, lastUpdated, refreshing }: Props) {
         </span>
       </div>
 
-      {/* 우측 — 업데이트 시간 + 새로고침 버튼 */}
-      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+      {/* 우측 영역 */}
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '16px' }}>
+
+        {/* 갱신 시간 */}
         {timeStr && (
           <span style={{ fontSize: '11px', color: '#8DA9C4' }}>
             {timeStr} 갱신
           </span>
         )}
+
+        {/* 새로고침 버튼 */}
         {onRefresh && (
           <button
             onClick={onRefresh}
             disabled={refreshing}
-            title="데이터 새로고침"
+            title="Google Sheets에서 최신 데이터 불러오기"
             style={{
               display: 'flex', alignItems: 'center', gap: '5px',
-              background: refreshing ? '#13315C' : '#13315C',
-              border: '1px solid #8DA9C4',
-              borderRadius: '6px', padding: '5px 10px',
-              color: '#fff', fontSize: '12px', cursor: refreshing ? 'not-allowed' : 'pointer',
-              opacity: refreshing ? 0.6 : 1, transition: 'opacity .2s',
+              background: '#13315C', border: '1px solid #8DA9C4',
+              borderRadius: '6px', padding: '5px 12px',
+              color: '#fff', fontSize: '12px',
+              cursor: refreshing ? 'not-allowed' : 'pointer',
+              opacity: refreshing ? 0.6 : 1,
             }}
           >
             <span style={{ display: 'inline-block', animation: refreshing ? 'spin .8s linear infinite' : 'none' }}>
@@ -59,7 +63,7 @@ export default function Header({ onRefresh, lastUpdated, refreshing }: Props) {
           </button>
         )}
 
-        {/* 네비게이션 */}
+        {/* 네비 */}
         <nav style={{ display: 'flex', gap: '20px' }}>
           {['지도', '리스트', '리포트'].map(item => (
             <a key={item} href="#" style={{ color: '#8DA9C4', fontSize: '13px', textDecoration: 'none' }}>

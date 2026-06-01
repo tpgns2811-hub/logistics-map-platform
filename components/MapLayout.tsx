@@ -99,7 +99,11 @@ export default function MapLayout() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <Header />
+      <Header
+        onRefresh={() => loadData()}
+        lastUpdated={lastUpdated}
+        refreshing={dataLoading}
+      />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
 
         {/* 모바일 dimmer */}

@@ -1,7 +1,7 @@
 import MapLayout from '@/components/MapLayout';
-import centers from '@/data/logisticsCenters.json';
-import type { LogisticsCenter } from '@/types/logistics';
+import { fetchCenters } from '@/lib/fetchCenters';
 
-export default function Home() {
-  return <MapLayout centers={centers as LogisticsCenter[]} />;
+export default async function Home() {
+  const centers = await fetchCenters();
+  return <MapLayout centers={centers} />;
 }

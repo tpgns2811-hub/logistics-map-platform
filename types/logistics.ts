@@ -13,7 +13,10 @@ export interface FloorInfo {
 export interface LogisticsCenter {
   id: string;
   name: string;
-  address: string;
+  province: string;         // 경기도 / 인천광역시
+  city: string;             // 이천시 / 광주시
+  district: string;         // 마장면 / 도척면
+  address: string;          // province + city + district 합산
   latitude: number;
   longitude: number;
   developer: string;

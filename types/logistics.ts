@@ -1,4 +1,6 @@
-export type CenterStatus = '운영중' | '공사중' | '계획중' | '준공완료';
+export type TempType = '저온' | '상온' | '복합';
+
+export type CenterStatus = '운영중' | '공사중' | '준공완료' | '미착공';
 
 export interface LogisticsCenter {
   id: string;
@@ -12,6 +14,6 @@ export interface LogisticsCenter {
   gfa: number;
   completion_date: string;
   status: CenterStatus;
-  cold_storage: boolean;
+  temp_type: TempType;
   image: string;
 }

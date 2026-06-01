@@ -8,7 +8,7 @@ import DetailPanel from './DetailPanel';
 import Legend from './Legend';
 import type { LogisticsCenter, CenterStatus, TempType } from '@/types/logistics';
 
-const AUTO_REFRESH_MS = 5 * 60 * 1000; // 5분 자동 갱신
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
 function formatTime(d: Date) {
   return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
@@ -17,6 +17,7 @@ function formatTime(d: Date) {
 export default function MapLayout() {
   const [centers,      setCenters]      = useState<LogisticsCenter[]>([]);
   const [dataLoading,  setDataLoading]  = useState(true);
+  const [refreshing,   setRefreshing]   = useState(false);   // ✅ 1. 여기로 이동
   const [lastUpdated,  setLastUpdated]  = useState<Date | null>(null);
   const [search,       setSearch]       = useState('');
   const [tempFilter,   setTempFilter]   = useState<'all' | TempType>('all');
@@ -26,7 +27,6 @@ export default function MapLayout() {
   const [mapReady,     setMapReady]     = useState(false);
   const [isMobile,     setIsMobile]     = useState(false);
 
-  /* ── 모바일 감지 ── */
   useEffect(() => {
     const check = () => {
       const mobile = window.innerWidth < 768;
@@ -38,9 +38,10 @@ export default function MapLayout() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  /* ── 데이터 fetch ── */
+  // ✅ 2. loadData — 초기 로딩 vs 새로고침 분리
   const loadData = useCallback(async (silent = false) => {
-    if (!silent) setDataLoading(true);
+    if (silent) { setRefreshing(true); }
+    else        { setDataLoading(true); }
     try {
       const res = await fetch('/api/centers');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -51,17 +52,16 @@ export default function MapLayout() {
       console.error('[MapLayout] 데이터 로드 실패:', err);
     } finally {
       setDataLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
-  /* 최초 로드 + 5분 자동갱신 */
   useEffect(() => {
     loadData();
     const timer = setInterval(() => loadData(true), AUTO_REFRESH_MS);
     return () => clearInterval(timer);
   }, [loadData]);
 
-  /* ── 필터링 ── */
   const filtered = useMemo(() => centers.filter(c => {
     const matchSearch = search === '' || c.name.includes(search) || c.address.includes(search);
     const matchTemp   = tempFilter   === 'all' || c.temp_type === tempFilter;
@@ -86,8 +86,8 @@ export default function MapLayout() {
     mixed: filtered.filter(c => c.temp_type === '복합').length,
   }), [filtered]);
 
-  /* ── 전체 로딩 화면 ── */
   if (dataLoading) {
+    // ✅ 3. if 블록 안에 useState 없음
     return (
       <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#F5F7FA', gap: '16px' }}>
         <div style={{ width: '40px', height: '40px', border: '3px solid #c5d5e8', borderTopColor: '#0B2545', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
@@ -99,19 +99,18 @@ export default function MapLayout() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      {/* ✅ 4. Header에 props 전달 */}
       <Header
-        onRefresh={() => loadData()}
+        onRefresh={() => loadData(true)}
         lastUpdated={lastUpdated}
-        refreshing={dataLoading}
+        refreshing={refreshing}
       />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
 
-        {/* 모바일 dimmer */}
         {isMobile && sidebarOpen && (
           <div onClick={() => setSidebarOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 30 }} />
         )}
 
-        {/* 사이드바 */}
         <div style={{
           flexShrink: 0, overflow: 'hidden', transition: 'width 0.25s ease',
           width: sidebarOpen ? '280px' : '0',
@@ -128,10 +127,8 @@ export default function MapLayout() {
           />
         </div>
 
-        {/* 지도 영역 */}
         <main style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
-          {/* 지도 로딩 스켈레톤 */}
           {!mapReady && (
             <div style={{ position: 'absolute', inset: 0, background: '#e8eff7', zIndex: 15, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
               <div style={{ width: '36px', height: '36px', border: '3px solid #c5d5e8', borderTopColor: '#0B2545', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
@@ -140,12 +137,11 @@ export default function MapLayout() {
             </div>
           )}
 
-          {/* 사이드바 토글 */}
           <button
             onClick={() => setSidebarOpen(v => !v)}
             style={{
               position: 'absolute', top: '50%', left: '10px', transform: 'translateY(-50%)',
-              zIndex: 12, background: '#fff', border: '1px solid #E5E9F0', borderRadius: '6px',
+              zIndex: 16, background: '#fff', border: '1px solid #E5E9F0', borderRadius: '6px',
               width: '22px', height: '44px', cursor: 'pointer', color: '#64748b', fontSize: '11px',
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
@@ -153,12 +149,12 @@ export default function MapLayout() {
             {sidebarOpen ? '◀' : '▶'}
           </button>
 
-          {/* 통계 카드 + 새로고침 */}
+          {/* ✅ 5. 통계카드 zIndex 16으로 (스켈레톤 15보다 위) */}
           <div style={{
             position: 'absolute', top: '16px', left: '44px',
             background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)',
             border: '1px solid #E5E9F0', borderRadius: '10px',
-            padding: '10px 14px', zIndex: 11,
+            padding: '10px 14px', zIndex: 16,
             boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
           }}>
             <div style={{ fontSize: '10px', color: '#8DA9C4', textTransform: 'uppercase', letterSpacing: '0.5px' }}>표시 중</div>
@@ -168,22 +164,22 @@ export default function MapLayout() {
               <span style={{ fontSize: '10px', color: '#1d4ed8' }}>❄ {stats.cold}</span>
               <span style={{ fontSize: '10px', color: '#1d4ed8' }}>🌡❄ {stats.mixed}</span>
             </div>
-
-            {/* 업데이트 시간 + 새로고침 버튼 */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', borderTop: '1px solid #F1F5F9', paddingTop: '6px' }}>
               <span style={{ fontSize: '10px', color: '#94a3b8' }}>
                 {lastUpdated ? `${formatTime(lastUpdated)} 갱신` : '-'}
               </span>
               <button
-                onClick={() => loadData()}
+                onClick={() => loadData(true)}
+                disabled={refreshing}
                 title="데이터 새로고침"
                 style={{
                   marginLeft: 'auto', border: 'none', background: '#F5F7FA',
                   borderRadius: '4px', padding: '2px 6px', cursor: 'pointer',
                   fontSize: '11px', color: '#0B2545',
+                  opacity: refreshing ? 0.5 : 1,
                 }}
               >
-                🔄
+                {refreshing ? '⏳' : '🔄'}
               </button>
             </div>
           </div>

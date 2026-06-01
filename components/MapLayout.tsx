@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import KakaoMap from './KakaoMap';
+import DetailPanel from './DetailPanel';
 import type { LogisticsCenter, CenterStatus, TempType } from '@/types/logistics';
 
 export default function MapLayout({ centers }: { centers: LogisticsCenter[] }) {
@@ -18,6 +19,11 @@ export default function MapLayout({ centers }: { centers: LogisticsCenter[] }) {
     const matchStatus = statusFilter === 'all' || c.status === statusFilter;
     return matchSearch && matchTemp && matchStatus;
   }), [centers, search, tempFilter, statusFilter]);
+
+  const selectedCenter = useMemo(
+    () => centers.find(c => c.id === selectedId) ?? null,
+    [centers, selectedId],
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -35,11 +41,15 @@ export default function MapLayout({ centers }: { centers: LogisticsCenter[] }) {
           selectedId={selectedId}
           onSelect={setSelectedId}
         />
-        <main style={{ flex: 1, position: 'relative' }}>
+        <main style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
           <KakaoMap
             centers={filtered}
             selectedId={selectedId}
             onSelect={setSelectedId}
+          />
+          <DetailPanel
+            center={selectedCenter}
+            onClose={() => setSelectedId(null)}
           />
         </main>
       </div>

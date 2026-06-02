@@ -9,9 +9,9 @@ function parseCSVLine(line: string): string[] {
   const result: string[] = [];
   let cur = '', inQ = false;
   for (const ch of line) {
-    if (ch === '"')           { inQ = !inQ; }
+    if (ch === '"')              { inQ = !inQ; }
     else if (ch === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
-    else                      { cur += ch; }
+    else                         { cur += ch; }
   }
   result.push(cur.trim());
   return result;
@@ -107,11 +107,11 @@ export async function fetchCenters(): Promise<LogisticsCenter[]> {
   }
 
   try {
-    // ── Sheet1 + Sheet2 병렬 fetch ──
+    // ── Sheet1 + Sheet2 병렬 fetch (캐시 없이 항상 최신 데이터) ──
     const [csv1, csv2] = await Promise.all([
-      fetch(SHEET1_URL, { next: { revalidate: 3600 } }).then(r => r.text()),
+      fetch(SHEET1_URL, { cache: 'no-store' }).then(r => r.text()),
       SHEET2_URL
-        ? fetch(SHEET2_URL, { next: { revalidate: 3600 } }).then(r => r.text())
+        ? fetch(SHEET2_URL, { cache: 'no-store' }).then(r => r.text())
         : Promise.resolve(''),
     ]);
 

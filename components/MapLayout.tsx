@@ -17,7 +17,7 @@ function formatTime(d: Date) {
 export default function MapLayout() {
   const [centers,      setCenters]      = useState<LogisticsCenter[]>([]);
   const [dataLoading,  setDataLoading]  = useState(true);
-  const [refreshing,   setRefreshing]   = useState(false);   // ✅ 1. 여기로 이동
+  const [refreshing,   setRefreshing]   = useState(false);
   const [lastUpdated,  setLastUpdated]  = useState<Date | null>(null);
   const [search,       setSearch]       = useState('');
   const [tempFilter,   setTempFilter]   = useState<'all' | TempType>('all');
@@ -38,10 +38,9 @@ export default function MapLayout() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // ✅ 2. loadData — 초기 로딩 vs 새로고침 분리
   const loadData = useCallback(async (silent = false) => {
     if (silent) { setRefreshing(true); }
-    else        { setDataLoading(true); }
+    else { setDataLoading(true); }
     try {
       const res = await fetch('/api/centers');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -87,7 +86,6 @@ export default function MapLayout() {
   }), [filtered]);
 
   if (dataLoading) {
-    // ✅ 3. if 블록 안에 useState 없음
     return (
       <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#F5F7FA', gap: '16px' }}>
         <div style={{ width: '40px', height: '40px', border: '3px solid #c5d5e8', borderTopColor: '#0B2545', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
@@ -99,7 +97,6 @@ export default function MapLayout() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* ✅ 4. Header에 props 전달 */}
       <Header
         onRefresh={() => loadData(true)}
         lastUpdated={lastUpdated}
@@ -121,14 +118,13 @@ export default function MapLayout() {
             search={search} onSearch={setSearch}
             suggestions={suggestions}
             onSuggestionSelect={id => { setSelectedId(id); setSearch(centers.find(c => c.id === id)?.name ?? ''); }}
-            tempFilter={tempFilter}   onTempFilter={setTempFilter}
+            tempFilter={tempFilter} onTempFilter={setTempFilter}
             statusFilter={statusFilter} onStatusFilter={setStatusFilter}
             selectedId={selectedId} onSelect={setSelectedId}
           />
         </div>
 
         <main style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-
           {!mapReady && (
             <div style={{ position: 'absolute', inset: 0, background: '#e8eff7', zIndex: 15, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
               <div style={{ width: '36px', height: '36px', border: '3px solid #c5d5e8', borderTopColor: '#0B2545', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
@@ -137,25 +133,23 @@ export default function MapLayout() {
             </div>
           )}
 
-          <button
-            onClick={() => setSidebarOpen(v => !v)}
-            style={{
-              position: 'absolute', top: '50%', left: '10px', transform: 'translateY(-50%)',
-              zIndex: 16, background: '#fff', border: '1px solid #E5E9F0', borderRadius: '6px',
-              width: '22px', height: '44px', cursor: 'pointer', color: '#64748b', fontSize: '11px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >
+          {/* 사이드바 토글 */}
+          <button onClick={() => setSidebarOpen(v => !v)} style={{
+            position: 'absolute', top: '50%', left: '10px', transform: 'translateY(-50%)',
+            zIndex: 16, background: '#fff', border: '1px solid #E5E9F0', borderRadius: '6px',
+            width: '22px', height: '44px', cursor: 'pointer', color: '#64748b', fontSize: '11px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
             {sidebarOpen ? '◀' : '▶'}
           </button>
 
-          {/* ✅ 5. 통계카드 zIndex 16으로 (스켈레톤 15보다 위) */}
+          {/* 통계 카드 */}
           <div style={{
             position: 'absolute', top: '16px', left: '44px',
             background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)',
             border: '1px solid #E5E9F0', borderRadius: '10px',
             padding: '10px 14px', zIndex: 16,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.08)', minWidth: '140px',
           }}>
             <div style={{ fontSize: '10px', color: '#8DA9C4', textTransform: 'uppercase', letterSpacing: '0.5px' }}>표시 중</div>
             <div style={{ fontSize: '22px', fontWeight: 700, color: '#0B2545', lineHeight: 1.1 }}>{stats.total}</div>
@@ -163,38 +157,34 @@ export default function MapLayout() {
               <span style={{ fontSize: '10px', color: '#1d4ed8' }}>🌡 {stats.warm}</span>
               <span style={{ fontSize: '10px', color: '#1d4ed8' }}>❄ {stats.cold}</span>
               <span style={{ fontSize: '10px', color: '#1d4ed8' }}>🌡❄ {stats.mixed}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', borderTop: '1px solid #F1F5F9', paddingTop: '6px' }}>
-              <span style={{ fontSize: '10px', color: '#94a3b8' }}>
-                {lastUpdated ? `${formatTime(lastUpdated)} 갱신` : '-'}
-              </span>
-              <button
-                onClick={() => loadData(true)}
-                disabled={refreshing}
-                title="데이터 새로고침"
-                style={{
-                  marginLeft: 'auto', border: 'none', background: '#F5F7FA',
-                  borderRadius: '4px', padding: '2px 6px', cursor: 'pointer',
-                  fontSize: '11px', color: '#0B2545',
-                  opacity: refreshing ? 0.5 : 1,
-                }}
-              >
-                {refreshing ? '⏳' : '🔄'}
-              </button>
-            </div>
+           </div>
+          </div>
+            {/* 새로고침 버튼 */}
+            <button
+              onClick={() => loadData(true)}
+              disabled={refreshing}
+              style={{
+                marginTop: '8px', width: '100%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+                background: '#0B2545', color: '#fff',
+                border: 'none', borderRadius: '6px',
+                padding: '5px 0', cursor: refreshing ? 'not-allowed' : 'pointer',
+                fontSize: '11px', fontWeight: 600,
+                opacity: refreshing ? 0.6 : 1,
+              }}
+            >
+              {refreshing ? '⏳ 갱신 중...' : '🔄 새로고침'}
+            </button>
+            {lastUpdated && (
+              <div style={{ fontSize: '9px', color: '#94a3b8', textAlign: 'center', marginTop: '4px' }}>
+                {formatTime(lastUpdated)} 갱신
+              </div>
+            )}
           </div>
 
-          <KakaoMap
-            centers={filtered}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onReady={() => setMapReady(true)}
-          />
+          <KakaoMap centers={filtered} selectedId={selectedId} onSelect={setSelectedId} onReady={() => setMapReady(true)} />
           <Legend />
-          <DetailPanel
-            center={selectedCenter}
-            onClose={() => setSelectedId(null)}
-          />
+          <DetailPanel center={selectedCenter} onClose={() => setSelectedId(null)} />
         </main>
       </div>
     </div>

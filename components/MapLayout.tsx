@@ -171,6 +171,7 @@ export default function MapLayout() {
           </div>
 
           <KakaoMap
+            allCenters={centers}
             centers={filtered}
             selectedId={selectedId}
             onSelect={setSelectedId}

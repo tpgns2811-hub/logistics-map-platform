@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { LogisticsCenter, CenterStatus, TempType } from '@/types/logistics';
 
 interface Props {
@@ -6,8 +5,8 @@ interface Props {
   total: number;
   search: string;
   onSearch: (v: string) => void;
-  suggestions: LogisticsCenter[];
-  onSuggestionSelect: (id: string) => void;
+  suggestions: LogisticsCenter[];          // 유지 (MapLayout 호환), 미사용
+  onSuggestionSelect: (id: string) => void; // 유지 (MapLayout 호환), 미사용
   tempFilter: 'all' | TempType;
   onTempFilter: (v: 'all' | TempType) => void;
   statusFilter: 'all' | CenterStatus;
@@ -31,60 +30,33 @@ const STATUS_COLOR: Record<string, string> = {
 const TEMP_ICON: Record<string, string> = { '저온': '❄', '상온': '🌡', '복합': '🌡❄' };
 
 export default function Sidebar({
-  centers, total, search, onSearch, suggestions, onSuggestionSelect,
-  tempFilter, onTempFilter, statusFilter, onStatusFilter, selectedId, onSelect,
+  centers, total, search, onSearch,
+  tempFilter, onTempFilter, statusFilter, onStatusFilter,
+  selectedId, onSelect,
 }: Props) {
-  const [focused, setFocused] = useState(false);
-  const showSuggs = focused && suggestions.length > 0 && search.length > 0;
-
   return (
     <aside style={{
       width: '280px', height: '100%', flexShrink: 0,
       background: '#fff', borderRight: '1px solid #E5E9F0',
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
-      {/* 검색 */}
+      {/* 검색 (자동완성 제거) */}
       <div style={{ padding: '12px', borderBottom: '1px solid #E5E9F0' }}>
-        <div style={{ position: 'relative' }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            background: '#F5F7FA', borderRadius: '8px',
-            padding: '8px 12px', border: `1px solid ${focused ? '#0B2545' : '#E5E9F0'}`,
-            transition: 'border-color .15s',
-          }}>
-            <span style={{ color: '#94a3b8', fontSize: '14px' }}>🔍</span>
-            <input
-              type="text" placeholder="지역 또는 센터명 검색..."
-              value={search}
-              onChange={e => onSearch(e.target.value)}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setTimeout(() => setFocused(false), 150)}
-              style={{ border: 'none', background: 'none', outline: 'none', fontSize: '12px', color: '#0B2545', width: '100%' }}
-            />
-            {search && (
-              <button onClick={() => onSearch('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '14px', padding: 0 }}>✕</button>
-            )}
-          </div>
-
-          {/* 자동완성 드롭다운 */}
-          {showSuggs && (
-            <div style={{
-              position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
-              background: '#fff', border: '1px solid #E5E9F0', borderRadius: '8px',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.1)', zIndex: 100, overflow: 'hidden',
-            }}>
-              {suggestions.map(c => (
-                <div key={c.id}
-                  onMouseDown={() => { onSuggestionSelect(c.id); setFocused(false); }}
-                  style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #F5F7FA' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#F5F7FA')}
-                  onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-                >
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#0B2545' }}>{c.name}</div>
-                  <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '1px' }}>{c.address}</div>
-                </div>
-              ))}
-            </div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          background: '#F5F7FA', borderRadius: '8px',
+          padding: '8px 12px', border: '1px solid #E5E9F0',
+        }}>
+          <span style={{ color: '#94a3b8', fontSize: '14px' }}>🔍</span>
+          <input
+            type="text"
+            placeholder="지역 또는 센터명 검색..."
+            value={search}
+            onChange={e => onSearch(e.target.value)}
+            style={{ border: 'none', background: 'none', outline: 'none', fontSize: '12px', color: '#0B2545', width: '100%' }}
+          />
+          {search && (
+            <button onClick={() => onSearch('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '14px', padding: 0 }}>✕</button>
           )}
         </div>
 

@@ -6,8 +6,8 @@ import type { LogisticsCenter } from '@/types/logistics';
 declare global { interface Window { kakao: any; } }
 
 interface Props {
-  centers:     LogisticsCenter[];         // 필터된 센터 (표시 제어)
-  allCenters?: LogisticsCenter[];         // 전체 센터 (최초 마커 생성용)
+  centers:     LogisticsCenter[];
+  allCenters?: LogisticsCenter[];
   selectedId:  string | null;
   onSelect:    (id: string | null) => void;
   onReady?:    () => void;
@@ -18,8 +18,8 @@ const STATUS_DOT: Record<string, string> = {
   '준공완료': '#ef4444', '미착공': '#94a3b8',
 };
 const TEMP_STYLE = {
-  '저온': { bg: '#1d4ed8', icon: '❄'  },
-  '상온': { bg: '#1d4ed8', icon: '🌡' },
+  '저온': { bg: '#1d4ed8', icon: '❄'   },
+  '상온': { bg: '#1d4ed8', icon: '🌡'  },
   '복합': { bg: '#1d4ed8', icon: '🌡❄' },
 } as const;
 
@@ -29,15 +29,17 @@ const MAP_FILTERS = {
 } as const;
 type StyleKey = keyof typeof MAP_FILTERS;
 
-function markerHTML(c: LogisticsCenter, selected: boolean): string {
+/* ── 핀 HTML (크기·선택 상태 반영) ── */
+function pinHTML(c: LogisticsCenter, selected: boolean): string {
   const { bg, icon } = TEMP_STYLE[c.temp_type] ?? TEMP_STYLE['상온'];
   const dot = STATUS_DOT[c.status] ?? '#94a3b8';
   const sz  = selected ? 42 : 32;
   const fsz = c.temp_type === '복합' ? (selected ? 10 : 8) : (selected ? 15 : 11);
   return `
-    <div style="position:relative;width:${sz}px;height:${sz}px;cursor:pointer;">
-      <div style="width:${sz}px;height:${sz}px;background:${bg};border-radius:50% 50% 50% 0;
-        transform:rotate(-45deg);border:${selected ? 3 : 2}px solid #fff;
+    <div style="position:relative;width:${sz}px;height:${sz}px;">
+      <div style="width:${sz}px;height:${sz}px;background:${bg};
+        border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+        border:${selected ? 3 : 2}px solid #fff;
         box-shadow:${selected ? '0 4px 14px rgba(0,0,0,.45)' : '0 2px 6px rgba(0,0,0,.25)'};
         display:flex;align-items:center;justify-content:center;">
         <span style="transform:rotate(45deg);font-size:${fsz}px;color:#fff;line-height:1;letter-spacing:-1px">${icon}</span>
@@ -48,31 +50,40 @@ function markerHTML(c: LogisticsCenter, selected: boolean): string {
     </div>`;
 }
 
-function infoHTML(c: LogisticsCenter): string {
+/* ── 팝업 HTML (마커 DOM 내부 embed) ── */
+function popupHTML(c: LogisticsCenter): string {
   const { bg, icon } = TEMP_STYLE[c.temp_type] ?? TEMP_STYLE['상온'];
   const dot = STATUS_DOT[c.status] ?? '#94a3b8';
   return `
-    <div style="padding:14px 16px;min-width:240px;font-family:system-ui,sans-serif;line-height:1.5;">
-      <div style="font-size:15px;font-weight:600;color:#0B2545;margin-bottom:4px;">${c.name}</div>
-      <div style="font-size:12px;color:#64748b;margin-bottom:8px;">${c.address}</div>
-      <div style="display:flex;gap:6px;margin-bottom:8px;">
-        <span style="background:${bg}22;color:${bg};padding:2px 6px;border-radius:4px;font-size:11px;">${icon} ${c.temp_type}</span>
-        <span style="background:${dot}22;color:${dot};padding:2px 6px;border-radius:4px;font-size:11px;">${c.status}</span>
-      </div>
-      <div style="font-size:11px;color:#475569;">연면적 ${c.gfa.toLocaleString()}㎡ · ${c.developer}</div>
-    </div>`;
+    <div style="font-size:13px;font-weight:600;color:#0B2545;margin-bottom:3px;">${c.name}</div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:5px;">${c.address}</div>
+    <div style="display:flex;gap:5px;">
+      <span style="background:${bg}22;color:${bg};padding:2px 6px;border-radius:4px;font-size:10px;">${icon} ${c.temp_type}</span>
+      <span style="background:${dot}22;color:${dot};padding:2px 6px;border-radius:4px;font-size:10px;">${c.status}</span>
+    </div>
+    <div style="font-size:10px;color:#94a3b8;margin-top:4px;">${c.gfa.toLocaleString()}㎡ · ${c.developer}</div>
+    <div style="position:absolute;bottom:-6px;left:50%;
+      width:10px;height:10px;background:#fff;
+      border-right:1px solid #E5E9F0;border-bottom:1px solid #E5E9F0;
+      transform:translateX(-50%) rotate(45deg);"></div>`;
 }
+
+type OverlayData = {
+  ov:     any;
+  el:     HTMLDivElement;
+  pin:    HTMLDivElement;
+  popup:  HTMLDivElement;
+  center: LogisticsCenter;
+};
 
 export default function KakaoMap({ centers, allCenters, selectedId, onSelect, onReady }: Props) {
   const mapRef        = useRef<HTMLDivElement>(null);
   const mapInst       = useRef<any>(null);
-  const overlays      = useRef<Record<string, { ov: any; el: HTMLDivElement; center: LogisticsCenter }>>({});
-  const infoWins      = useRef<Record<string, any>>({});
+  const overlays      = useRef<Record<string, OverlayData>>({});
   const inited        = useRef(false);
   const selectedIdRef = useRef<string | null>(selectedId);
   const [mapStyle, setMapStyle] = useState<StyleKey>('simple');
 
-  /* ── selectedIdRef 동기화 ── */
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
   /* ── 지도 초기화 ── */
@@ -89,16 +100,10 @@ export default function KakaoMap({ centers, allCenters, selectedId, onSelect, on
         });
         mapInst.current = map;
         map.addControl(new window.kakao.maps.ZoomControl(), window.kakao.maps.ControlPosition.RIGHT);
-
-        // 전체 마커 생성 (allCenters 우선 사용)
         (allCenters ?? centers).forEach(c => addMarker(c, map));
 
-        // 지도 클릭 → 팝업 닫기 + 선택 해제
-        window.kakao.maps.event.addListener(map, 'click', () => {
-          Object.values(infoWins.current).forEach(iw => iw.close());
-          onSelect(null);
-        });
-
+        // 지도 클릭 → 선택 해제 (팝업도 같이 닫힘)
+        window.kakao.maps.event.addListener(map, 'click', () => onSelect(null));
         onReady?.();
       });
     };
@@ -114,81 +119,98 @@ export default function KakaoMap({ centers, allCenters, selectedId, onSelect, on
   /* ── 필터 변경 → 핀 표시/숨김 ── */
   useEffect(() => {
     if (!mapInst.current) return;
-    const visibleIds = new Set(centers.map(c => c.id));
+    const visible = new Set(centers.map(c => c.id));
     Object.entries(overlays.current).forEach(([id, { ov }]) => {
-      ov.setMap(visibleIds.has(id) ? mapInst.current : null);
+      ov.setMap(visible.has(id) ? mapInst.current : null);
     });
   }, [centers]);
 
   /* ── selectedId 변경 ── */
   useEffect(() => {
     selectedIdRef.current = selectedId;
-    if (!mapInst.current || !window.kakao) return;
+    if (!mapInst.current) return;
 
-    // 전체 마커 크기/스타일 갱신
-    Object.entries(overlays.current).forEach(([id, { el, ov, center }]) => {
-      el.innerHTML = markerHTML(center, id === selectedId);
-      ov.setZIndex(id === selectedId ? 10 : 1);
+    Object.entries(overlays.current).forEach(([id, { pin, ov, center, popup }]) => {
+      const sel = id === selectedId;
+      pin.innerHTML = pinHTML(center, sel);
+      ov.setZIndex(sel ? 10 : 1);
+      // 선택 시 팝업 고정, 아니면 숨김
+      popup.style.display = sel ? 'block' : 'none';
     });
 
-    // 선택 해제 시 모든 팝업 닫기
-    if (!selectedId) {
-      Object.values(infoWins.current).forEach(iw => iw.close());
-      return;
-    }
-
-    // 선택된 센터로 이동 + 팝업 열기
+    if (!selectedId) return;
     const target = overlays.current[selectedId]?.center;
-    if (!target) return;
-    mapInst.current.panTo(new window.kakao.maps.LatLng(target.latitude, target.longitude));
-    Object.values(infoWins.current).forEach(iw => iw.close());
-    infoWins.current[selectedId]?.open(mapInst.current);
+    if (target) {
+      mapInst.current.panTo(new window.kakao.maps.LatLng(target.latitude, target.longitude));
+    }
   }, [selectedId]);
 
+  /* ── 마커 생성 ── */
   function addMarker(c: LogisticsCenter, map: any) {
     const pos = new window.kakao.maps.LatLng(c.latitude, c.longitude);
-    const el  = document.createElement('div');
-    el.innerHTML = markerHTML(c, false);
 
-    // 호버 → 팝업 임시 표시
-    el.addEventListener('mouseenter', () => {
+    // 루트 컨테이너
+    const el = document.createElement('div');
+    el.style.cssText = 'position:relative;display:inline-block;cursor:pointer;';
+
+    // 핀
+    const pin = document.createElement('div');
+    pin.innerHTML = pinHTML(c, false);
+    el.appendChild(pin);
+
+    // 팝업 (마커 DOM 내부에 embed → 마우스 이동시 이벤트 끊김 없음)
+    const popup = document.createElement('div');
+    popup.style.cssText = [
+      'position:absolute',
+      'bottom:110%',
+      'left:50%',
+      'transform:translateX(-50%)',
+      'background:#fff',
+      'border:1px solid #E5E9F0',
+      'border-radius:8px',
+      'padding:10px 12px',
+      'min-width:200px',
+      'box-shadow:0 4px 16px rgba(0,0,0,.12)',
+      'pointer-events:none',
+      'z-index:50',
+      'display:none',
+      'white-space:nowrap',
+      'line-height:1.45',
+    ].join(';');
+    popup.innerHTML = popupHTML(c);
+    el.appendChild(popup);
+
+    /* ── 호버 이벤트: relatedTarget 체크로 자식 이동 시 무시 ──
+       el 내부의 자식(popup 포함)으로 마우스가 이동해도
+       mouseover/mouseout이 재발화되지 않아 점멸이 사라짐          */
+    el.addEventListener('mouseover', (e: MouseEvent) => {
+      if (el.contains(e.relatedTarget as Node)) return; // 자식으로 이동 → 무시
       el.style.transform = 'scale(1.15)';
       el.style.transition = 'transform .15s ease';
-      if (selectedIdRef.current !== c.id) {
-        Object.entries(infoWins.current).forEach(([id, iw]) => {
-          if (id !== selectedIdRef.current) iw.close();
-        });
-        infoWins.current[c.id]?.open(map);
-      }
+      if (selectedIdRef.current !== c.id) popup.style.display = 'block';
     });
 
-    // 호버 해제 → 팝업 닫기 (고정된 게 아닌 경우)
-    el.addEventListener('mouseleave', () => {
+    el.addEventListener('mouseout', (e: MouseEvent) => {
+      if (el.contains(e.relatedTarget as Node)) return; // 자식에서 이동 → 무시
       el.style.transform = 'scale(1)';
-      if (selectedIdRef.current !== c.id) {
-        infoWins.current[c.id]?.close();
-      }
+      if (selectedIdRef.current !== c.id) popup.style.display = 'none';
     });
 
-    // 클릭 → 팝업 고정
+    // 클릭 → 팝업 고정 (지도 click 이벤트 버블 차단)
     el.addEventListener('click', (e: MouseEvent) => {
       e.stopPropagation();
       onSelect(c.id);
-      Object.values(infoWins.current).forEach(iw => iw.close());
-      infoWins.current[c.id]?.open(map);
     });
 
-    const ov = new window.kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 1, zIndex: 1 });
+    const ov = new window.kakao.maps.CustomOverlay({
+      position: pos, content: el, yAnchor: 1, zIndex: 1,
+    });
     ov.setMap(map);
-    overlays.current[c.id] = { ov, el, center: c };
-
-    const iw = new window.kakao.maps.InfoWindow({ content: infoHTML(c), removable: true, zIndex: 20, position: pos });
-    infoWins.current[c.id] = iw;
+    overlays.current[c.id] = { ov, el, pin, popup, center: c };
   }
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      {/* 지도 (스타일 필터 적용) */}
       <div
         ref={mapRef}
         style={{ width: '100%', height: '100%', filter: MAP_FILTERS[mapStyle], transition: 'filter .3s ease' }}

@@ -14,6 +14,7 @@ html, body {
   height: 100%;
   margin: 0;
   padding: 0;
+  overscroll-behavior: none; /* 스크롤 체이닝/바운스 차단 (지도 줌 보완) */
 }
 
 * {

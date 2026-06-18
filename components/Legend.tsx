@@ -1,13 +1,15 @@
 export default function Legend() {
+  // 온도구분: 상온 → 저온 → 복합 (마커와 동일한 색/글자)
   const markers = [
-    { icon: '❄',   label: '저온' },
-    { icon: '🌡',  label: '상온' },
-    { icon: '🌡❄', label: '복합' },
+    { color: '#ea580c', char: '상', label: '상온' },
+    { color: '#2563eb', char: '저', label: '저온' },
+    { color: '#7c3aed', char: '복', label: '복합' },
   ];
+  // 운영상태: 운영중 → 준공완료 → 공사중 → 미착공
   const dots = [
     { color: '#16a34a', label: '운영중'  },
-    { color: '#f59e0b', label: '공사중'  },
     { color: '#ef4444', label: '준공완료' },
+    { color: '#f59e0b', label: '공사중'  },
     { color: '#94a3b8', label: '미착공'  },
   ];
 
@@ -23,23 +25,22 @@ export default function Legend() {
         범례
       </div>
 
-      {markers.map(({ icon, label }) => (
+      {markers.map(({ color, char, label }) => (
         <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '5px' }}>
           <div style={{
-            width: '18px', height: '18px', background: '#1d4ed8', flexShrink: 0,
+            width: '18px', height: '18px', background: color, flexShrink: 0,
             borderRadius: '50% 50% 50% 0', transform: 'rotate(-45deg)',
             border: '1.5px solid #fff', boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            {/* ✅ [...icon] spread로 emoji 올바르게 렌더링 */}
             <span style={{
               transform: 'rotate(45deg)',
               color: '#fff',
-              fontSize: label === '복합' ? '5px' : '8px',
+              fontSize: '9px',
+              fontWeight: 700,
               lineHeight: 1,
-              letterSpacing: '-1px',
             }}>
-              {[...icon].join('')}
+              {char}
             </span>
           </div>
           <span style={{ fontSize: '11px', color: '#475569' }}>{label}</span>

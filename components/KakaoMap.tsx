@@ -17,24 +17,28 @@ const STATUS_DOT: Record<string, string> = {
   '운영중': '#16a34a', '공사중': '#f59e0b',
   '준공완료': '#ef4444', '미착공': '#94a3b8',
 };
+
+/* ── 온도구분: 색으로 1차 구분(위성지도에서도 식별) + 한글 1글자 ── */
 const TEMP_STYLE = {
-  '저온': { bg: '#1d4ed8', icon: '❄'   },
-  '상온': { bg: '#1d4ed8', icon: '🌡'  },
-  '복합': { bg: '#1d4ed8', icon: '🌡❄' },
+  '상온': { bg: '#ea580c', label: '상' }, // 주황
+  '저온': { bg: '#2563eb', label: '저' }, // 파랑
+  '복합': { bg: '#7c3aed', label: '복' }, // 보라
 } as const;
 
-const MAP_FILTERS = {
-  normal: 'none',
-  simple: 'grayscale(0.8) brightness(1.08) contrast(0.95)',
-} as const;
-type StyleKey = keyof typeof MAP_FILTERS;
+/* ── 지도 버전(맵타입) ── */
+const MAP_TYPES = [
+  { key: 'ROADMAP', label: '기본'    },
+  { key: 'SKYVIEW', label: '스카이뷰' },
+  { key: 'HYBRID',  label: '하이브리드' },
+] as const;
+type MapTypeKey = typeof MAP_TYPES[number]['key'];
 
 /* ── 핀 HTML (크기·선택 상태 반영) ── */
 function pinHTML(c: LogisticsCenter, selected: boolean): string {
-  const { bg, icon } = TEMP_STYLE[c.temp_type] ?? TEMP_STYLE['상온'];
+  const { bg, label } = TEMP_STYLE[c.temp_type] ?? TEMP_STYLE['상온'];
   const dot = STATUS_DOT[c.status] ?? '#94a3b8';
   const sz  = selected ? 42 : 32;
-  const fsz = c.temp_type === '복합' ? (selected ? 10 : 8) : (selected ? 15 : 11);
+  const fsz = selected ? 16 : 12;
   return `
     <div style="position:relative;width:${sz}px;height:${sz}px;">
       <div style="width:${sz}px;height:${sz}px;background:${bg};
@@ -42,7 +46,7 @@ function pinHTML(c: LogisticsCenter, selected: boolean): string {
         border:${selected ? 3 : 2}px solid #fff;
         box-shadow:${selected ? '0 4px 14px rgba(0,0,0,.45)' : '0 2px 6px rgba(0,0,0,.25)'};
         display:flex;align-items:center;justify-content:center;">
-        <span style="transform:rotate(45deg);font-size:${fsz}px;color:#fff;line-height:1;letter-spacing:-1px">${icon}</span>
+        <span style="transform:rotate(45deg);font-size:${fsz}px;font-weight:700;color:#fff;line-height:1;">${label}</span>
       </div>
       <div style="position:absolute;top:-3px;right:-3px;width:11px;height:11px;
         background:${dot};border-radius:50%;border:1.5px solid #fff;
@@ -52,14 +56,14 @@ function pinHTML(c: LogisticsCenter, selected: boolean): string {
 
 /* ── 팝업 HTML (마커 DOM 내부 embed) ── */
 function popupHTML(c: LogisticsCenter): string {
-  const { bg, icon } = TEMP_STYLE[c.temp_type] ?? TEMP_STYLE['상온'];
+  const { bg } = TEMP_STYLE[c.temp_type] ?? TEMP_STYLE['상온'];
   const dot = STATUS_DOT[c.status] ?? '#94a3b8';
   return `
     <div style="font-size:13px;font-weight:600;color:#0B2545;margin-bottom:3px;">${c.name}</div>
     <div style="font-size:11px;color:#64748b;margin-bottom:5px;">${c.address}</div>
     <div style="display:flex;gap:5px;">
-      <span style="background:${bg}22;color:${bg};padding:2px 6px;border-radius:4px;font-size:10px;">${icon} ${c.temp_type}</span>
-      <span style="background:${dot}22;color:${dot};padding:2px 6px;border-radius:4px;font-size:10px;">${c.status}</span>
+      <span style="background:${bg}22;color:${bg};padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">${c.temp_type}</span>
+      <span style="background:${dot}22;color:${dot};padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">${c.status}</span>
     </div>
     <div style="font-size:10px;color:#94a3b8;margin-top:4px;">${c.gfa.toLocaleString()}㎡ · ${c.developer}</div>
     <div style="position:absolute;bottom:-6px;left:50%;
@@ -82,9 +86,28 @@ export default function KakaoMap({ centers, allCenters, selectedId, onSelect, on
   const overlays      = useRef<Record<string, OverlayData>>({});
   const inited        = useRef(false);
   const selectedIdRef = useRef<string | null>(selectedId);
-  const [mapStyle, setMapStyle] = useState<StyleKey>('simple');
+  const [mapType, setMapType] = useState<MapTypeKey>('ROADMAP');
 
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+
+  /* ── 지도 영역 위에서의 페이지 줌 방지 (트랙패드 핀치/Ctrl+휠) ──
+     지도 자체 줌은 Kakao SDK가 처리하고, 브라우저 페이지 줌만 차단 */
+  useEffect(() => {
+    const el = mapRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) e.preventDefault();   // Ctrl+휠 = 트랙패드 핀치 → 페이지 줌
+    };
+    const onGesture = (e: Event) => e.preventDefault(); // Safari 핀치 줌
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('gesturestart', onGesture as EventListener);
+    el.addEventListener('gesturechange', onGesture as EventListener);
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('gesturestart', onGesture as EventListener);
+      el.removeEventListener('gesturechange', onGesture as EventListener);
+    };
+  }, []);
 
   /* ── 지도 초기화 ── */
   useEffect(() => {
@@ -115,6 +138,12 @@ export default function KakaoMap({ centers, allCenters, selectedId, onSelect, on
       document.head.appendChild(s);
     }
   }, []);
+
+  /* ── 맵타입 변경 → 핀(CustomOverlay)은 지도 위에 그대로 유지됨 ── */
+  useEffect(() => {
+    if (!mapInst.current || !window.kakao) return;
+    mapInst.current.setMapTypeId(window.kakao.maps.MapTypeId[mapType]);
+  }, [mapType]);
 
   /* ── 필터 변경 → 핀 표시/숨김 ── */
   useEffect(() => {
@@ -180,9 +209,6 @@ export default function KakaoMap({ centers, allCenters, selectedId, onSelect, on
     popup.innerHTML = popupHTML(c);
     el.appendChild(popup);
 
-    /* ── 호버 이벤트: relatedTarget 체크로 자식 이동 시 무시 ──
-       el 내부의 자식(popup 포함)으로 마우스가 이동해도
-       mouseover/mouseout이 재발화되지 않아 점멸이 사라짐          */
     el.addEventListener('mouseover', (e: MouseEvent) => {
       if (el.contains(e.relatedTarget as Node)) return; // 자식으로 이동 → 무시
       el.style.transform = 'scale(1.15)';
@@ -213,26 +239,32 @@ export default function KakaoMap({ centers, allCenters, selectedId, onSelect, on
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div
         ref={mapRef}
-        style={{ width: '100%', height: '100%', filter: MAP_FILTERS[mapStyle], transition: 'filter .3s ease' }}
+        style={{
+          width: '100%',
+          height: '100%',
+          touchAction: 'none',          // 지도 위 제스처가 페이지로 새지 않게
+          overscrollBehavior: 'contain',
+        }}
       />
 
-      {/* 지도 스타일 토글 */}
+      {/* 지도 버전 토글 */}
       <div style={{
         position: 'absolute', top: '16px', right: '50px', zIndex: 16,
         display: 'flex', background: 'rgba(255,255,255,0.95)',
         border: '1px solid #E5E9F0', borderRadius: '6px', overflow: 'hidden',
         boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
       }}>
-        {(['normal', 'simple'] as StyleKey[]).map((s, i) => (
-          <button key={s} onClick={() => setMapStyle(s)} style={{
+        {MAP_TYPES.map(({ key, label }, i) => (
+          <button key={key} onClick={() => setMapType(key)} style={{
             padding: '5px 11px', fontSize: '11px', fontWeight: 600,
-            background: mapStyle === s ? '#0B2545' : 'transparent',
-            color: mapStyle === s ? '#fff' : '#64748b',
+            whiteSpace: 'nowrap',
+            background: mapType === key ? '#0B2545' : 'transparent',
+            color: mapType === key ? '#fff' : '#64748b',
             border: 'none',
             borderLeft: i > 0 ? '1px solid #E5E9F0' : 'none',
             cursor: 'pointer',
           }}>
-            {s === 'normal' ? '기본' : '심플'}
+            {label}
           </button>
         ))}
       </div>

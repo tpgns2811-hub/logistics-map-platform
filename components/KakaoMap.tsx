@@ -10,6 +10,7 @@ interface Props {
   centers:     LogisticsCenter[];   // 필터링된 표시 대상
   allCenters?: LogisticsCenter[];   // 전체 (id 조회용)
   unit:        Unit;
+  onUnit:      (u: Unit) => void;
   selectedId:  string | null;
   onSelect:    (id: string | null) => void;
   onReady?:    () => void;
@@ -68,7 +69,7 @@ type OverlayData = {
   ov: any; el: HTMLDivElement; pin: HTMLDivElement; popup: HTMLDivElement; center: LogisticsCenter;
 };
 
-export default function KakaoMap({ centers, allCenters, unit, selectedId, onSelect, onReady }: Props) {
+export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId, onSelect, onReady }: Props) {
   const mapRef        = useRef<HTMLDivElement>(null);
   const mapInst       = useRef<any>(null);
   const overlays      = useRef<Record<string, OverlayData>>({});
@@ -252,6 +253,12 @@ export default function KakaoMap({ centers, allCenters, unit, selectedId, onSele
     map.panTo(new window.kakao.maps.LatLng(c.latitude, c.longitude));
   }, [selectedId]);
 
+  const toggleBox: React.CSSProperties = {
+    position: 'absolute', right: '50px', zIndex: 16, display: 'inline-flex',
+    background: 'rgba(255,255,255,0.95)', border: '1px solid #E5E9F0',
+    borderRadius: '6px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+  };
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div
@@ -259,13 +266,22 @@ export default function KakaoMap({ centers, allCenters, unit, selectedId, onSele
         style={{ width: '100%', height: '100%', touchAction: 'none', overscrollBehavior: 'contain' }}
       />
 
-      {/* 지도 버전 토글 */}
-      <div style={{
-        position: 'absolute', top: '16px', right: '50px', zIndex: 16,
-        display: 'flex', background: 'rgba(255,255,255,0.95)',
-        border: '1px solid #E5E9F0', borderRadius: '6px', overflow: 'hidden',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-      }}>
+      {/* 면적 단위 토글 (새로고침 ↔ 지도 사이, 최상단) */}
+      <div style={{ ...toggleBox, top: '16px' }}>
+        {(['평', '㎡'] as Unit[]).map((u, i) => (
+          <button key={u} onClick={() => onUnit(u)} style={{
+            padding: '5px 12px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap',
+            background: unit === u ? '#0B2545' : 'transparent',
+            color: unit === u ? '#fff' : '#64748b',
+            border: 'none', borderLeft: i > 0 ? '1px solid #E5E9F0' : 'none', cursor: 'pointer',
+          }}>
+            {u}
+          </button>
+        ))}
+      </div>
+
+      {/* 지도 버전 토글 (단위 토글 아래) */}
+      <div style={{ ...toggleBox, top: '54px' }}>
         {MAP_TYPES.map(({ key, label }, i) => (
           <button key={key} onClick={() => setMapType(key)} style={{
             padding: '5px 11px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap',

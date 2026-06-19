@@ -25,8 +25,7 @@ interface Props {
   onFloorMin: (v: number) => void;
   availableOnly: boolean;
   onAvailableOnly: (v: boolean) => void;
-  unit: Unit;
-  onUnit: (v: Unit) => void;
+  unit: Unit; // 리스트 면적 표시용 (토글 UI는 지도 우상단으로 이동)
   selectedId: string | null;
   onSelect: (id: string) => void;
 }
@@ -55,12 +54,13 @@ export default function Sidebar({
   centers, total, search, onSearch,
   tempFilter, onTempFilter, statusFilter, onStatusFilter,
   gfaRange, onGfaRange, floorMin, onFloorMin,
-  availableOnly, onAvailableOnly, unit, onUnit,
+  availableOnly, onAvailableOnly, unit,
   selectedId, onSelect,
 }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewH, setViewH] = useState(600);
+  const [filtersOpen, setFiltersOpen] = useState(true);
 
   useEffect(() => {
     const measure = () => { if (listRef.current) setViewH(listRef.current.clientHeight); };
@@ -78,14 +78,40 @@ export default function Sidebar({
   const end   = Math.min(centers.length, Math.ceil((scrollTop + viewH) / ROW_H) + OVERSCAN);
   const slice = centers.slice(start, end);
 
+  // 적용된 필터 개수
+  const activeCount =
+    (tempFilter !== 'all' ? 1 : 0) +
+    (statusFilter !== 'all' ? 1 : 0) +
+    (gfaRange[0] !== 0 || gfaRange[1] !== GFA_SLIDER_MAX ? 1 : 0) +
+    (floorMin !== 0 ? 1 : 0) +
+    (availableOnly ? 1 : 0);
+
+  const pctMin = (gfaRange[0] / GFA_SLIDER_MAX) * 100;
+  const pctMax = (gfaRange[1] / GFA_SLIDER_MAX) * 100;
+
   return (
     <aside style={{
       width: '280px', height: '100%', flexShrink: 0,
       background: '#fff', borderRight: '1px solid #E5E9F0',
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
-      {/* 검색 + 필터 */}
-      <div style={{ padding: '12px', borderBottom: '1px solid #E5E9F0' }}>
+      {/* 듀얼 슬라이더 thumb 스타일 */}
+      <style>{`
+        .gfa-dual { position:absolute; left:0; width:100%; top:50%; transform:translateY(-50%);
+          margin:0; height:0; background:none; pointer-events:none; -webkit-appearance:none; appearance:none; }
+        .gfa-dual:focus { outline:none; }
+        .gfa-dual::-webkit-slider-thumb { -webkit-appearance:none; pointer-events:auto;
+          width:16px; height:16px; border-radius:50%; background:#0B2545; border:2px solid #fff;
+          box-shadow:0 1px 3px rgba(0,0,0,.3); cursor:pointer; margin-top:0; }
+        .gfa-dual::-moz-range-thumb { pointer-events:auto;
+          width:16px; height:16px; border-radius:50%; background:#0B2545; border:2px solid #fff;
+          box-shadow:0 1px 3px rgba(0,0,0,.3); cursor:pointer; }
+        .gfa-dual::-webkit-slider-runnable-track { background:transparent; height:0; }
+        .gfa-dual::-moz-range-track { background:transparent; height:0; }
+      `}</style>
+
+      {/* 검색 */}
+      <div style={{ padding: '12px 12px 0' }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: '8px',
           background: '#F5F7FA', borderRadius: '8px',
@@ -103,90 +129,100 @@ export default function Sidebar({
             <button onClick={() => onSearch('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '14px', padding: 0 }}>✕</button>
           )}
         </div>
+      </div>
 
-        {/* 온도 필터 */}
-        <div style={sectionLabel}>온도구분</div>
-        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-          {(['all', '상온', '저온', '복합'] as const).map(v => (
-            <button key={v} onClick={() => onTempFilter(v)} style={chip(tempFilter === v)}>
-              {v === 'all' ? '전체' : v}
-            </button>
-          ))}
-        </div>
+      {/* 필터 묶음 (접기/펼치기) */}
+      <div style={{ padding: '10px 12px 12px', borderBottom: '1px solid #E5E9F0' }}>
+        <button
+          onClick={() => setFiltersOpen(v => !v)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
+          }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: '#0B2545' }}>
+            필터
+            {activeCount > 0 && (
+              <span style={{
+                background: '#0B2545', color: '#fff', fontSize: '9px', fontWeight: 700,
+                minWidth: '16px', height: '16px', borderRadius: '8px',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
+              }}>{activeCount}</span>
+            )}
+          </span>
+          <span style={{ fontSize: '10px', color: '#94a3b8' }}>{filtersOpen ? '▲' : '▼'}</span>
+        </button>
 
-        {/* 상태 필터 */}
-        <div style={sectionLabel}>운영상태</div>
-        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-          {(['all', '운영중', '준공완료', '공사중', '미착공'] as const).map(v => (
-            <button key={v} onClick={() => onStatusFilter(v)} style={chip(statusFilter === v)}>
-              {v === 'all' ? '전체' : v}
-            </button>
-          ))}
-        </div>
+        {filtersOpen && (
+          <div>
+            {/* 온도 */}
+            <div style={sectionLabel}>온도구분</div>
+            <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+              {(['all', '상온', '저온', '복합'] as const).map(v => (
+                <button key={v} onClick={() => onTempFilter(v)} style={chip(tempFilter === v)}>
+                  {v === 'all' ? '전체' : v}
+                </button>
+              ))}
+            </div>
 
-        {/* 연면적 필터: 프리셋 칩 + 슬라이더 */}
-        <div style={sectionLabel}>연면적</div>
-        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-          {GFA_PRESETS.map(p => {
-            const active = gfaRange[0] === p.min && gfaRange[1] === p.max;
-            return (
-              <button key={p.label} onClick={() => onGfaRange([p.min, p.max])} style={chip(active)}>
-                {p.label}
+            {/* 상태 */}
+            <div style={sectionLabel}>운영상태</div>
+            <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+              {(['all', '운영중', '준공완료', '공사중', '미착공'] as const).map(v => (
+                <button key={v} onClick={() => onStatusFilter(v)} style={chip(statusFilter === v)}>
+                  {v === 'all' ? '전체' : v}
+                </button>
+              ))}
+            </div>
+
+            {/* 연면적: 칩 + 듀얼 슬라이더 */}
+            <div style={sectionLabel}>연면적</div>
+            <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+              {GFA_PRESETS.map(p => {
+                const active = gfaRange[0] === p.min && gfaRange[1] === p.max;
+                return (
+                  <button key={p.label} onClick={() => onGfaRange([p.min, p.max])} style={chip(active)}>
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ marginTop: '10px', padding: '0 8px' }}>
+              <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '6px', textAlign: 'center' }}>
+                {gfaText(gfaRange[0])} ~ {gfaText(gfaRange[1])}
+              </div>
+              <div style={{ position: 'relative', height: '20px' }}>
+                {/* base track */}
+                <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: 0, right: 0, height: '4px', background: '#E5E9F0', borderRadius: '2px' }} />
+                {/* filled */}
+                <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', height: '4px', background: '#0B2545', borderRadius: '2px', left: `${pctMin}%`, right: `${100 - pctMax}%` }} />
+                {/* min thumb */}
+                <input
+                  className="gfa-dual" type="range" min={0} max={GFA_SLIDER_MAX} step={GFA_STEP} value={gfaRange[0]}
+                  onChange={e => onGfaRange([Math.min(+e.target.value, gfaRange[1]), gfaRange[1]])}
+                />
+                {/* max thumb */}
+                <input
+                  className="gfa-dual" type="range" min={0} max={GFA_SLIDER_MAX} step={GFA_STEP} value={gfaRange[1]}
+                  onChange={e => onGfaRange([gfaRange[0], Math.max(+e.target.value, gfaRange[0])])}
+                />
+              </div>
+            </div>
+
+            {/* 조건 */}
+            <div style={sectionLabel}>조건</div>
+            <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+              {FLOOR_OPTIONS.map(o => (
+                <button key={o.value} onClick={() => onFloorMin(o.value)} style={chip(floorMin === o.value)}>
+                  {o.label}
+                </button>
+              ))}
+              <button onClick={() => onAvailableOnly(!availableOnly)} style={chip(availableOnly)}>
+                입주상담 가능
               </button>
-            );
-          })}
-        </div>
-        <div style={{ marginTop: '8px', padding: '0 2px' }}>
-          <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px', textAlign: 'center' }}>
-            {gfaText(gfaRange[0])} ~ {gfaText(gfaRange[1])}
+            </div>
           </div>
-          {/* 최소 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '9px', color: '#94a3b8', width: '20px' }}>최소</span>
-            <input
-              type="range" min={0} max={GFA_SLIDER_MAX} step={GFA_STEP} value={gfaRange[0]}
-              onChange={e => onGfaRange([Math.min(+e.target.value, gfaRange[1]), gfaRange[1]])}
-              style={{ flex: 1, accentColor: '#0B2545' }}
-            />
-          </div>
-          {/* 최대 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-            <span style={{ fontSize: '9px', color: '#94a3b8', width: '20px' }}>최대</span>
-            <input
-              type="range" min={0} max={GFA_SLIDER_MAX} step={GFA_STEP} value={gfaRange[1]}
-              onChange={e => onGfaRange([gfaRange[0], Math.max(+e.target.value, gfaRange[0])])}
-              style={{ flex: 1, accentColor: '#0B2545' }}
-            />
-          </div>
-        </div>
-
-        {/* 조건: 층 임계값(택1) + 입주상담 */}
-        <div style={sectionLabel}>조건</div>
-        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-          {FLOOR_OPTIONS.map(o => (
-            <button key={o.value} onClick={() => onFloorMin(o.value)} style={chip(floorMin === o.value)}>
-              {o.label}
-            </button>
-          ))}
-          <button onClick={() => onAvailableOnly(!availableOnly)} style={chip(availableOnly)}>
-            입주상담 가능
-          </button>
-        </div>
-
-        {/* 단위 토글 */}
-        <div style={sectionLabel}>면적 단위</div>
-        <div style={{ display: 'inline-flex', border: '1px solid #E5E9F0', borderRadius: '6px', overflow: 'hidden' }}>
-          {(['평', '㎡'] as Unit[]).map((u, i) => (
-            <button key={u} onClick={() => onUnit(u)} style={{
-              padding: '4px 14px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-              border: 'none', borderLeft: i > 0 ? '1px solid #E5E9F0' : 'none',
-              background: unit === u ? '#0B2545' : '#fff',
-              color: unit === u ? '#fff' : '#64748b',
-            }}>
-              {u}
-            </button>
-          ))}
-        </div>
+        )}
       </div>
 
       {/* 결과 수 */}

@@ -141,7 +141,7 @@ export default function MapLayout() {
             gfaRange={gfaRange} onGfaRange={setGfaRange}
             floorMin={floorMin} onFloorMin={setFloorMin}
             availableOnly={availableOnly} onAvailableOnly={setAvailableOnly}
-            unit={unit} onUnit={setUnit}
+            unit={unit}
             selectedId={selectedId} onSelect={setSelectedId}
           />
         </div>
@@ -189,6 +189,7 @@ export default function MapLayout() {
             allCenters={centers}
             centers={filtered}
             unit={unit}
+            onUnit={setUnit}
             selectedId={selectedId}
             onSelect={setSelectedId}
             onReady={() => setMapReady(true)}

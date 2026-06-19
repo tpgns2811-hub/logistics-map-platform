@@ -7,6 +7,10 @@ import KakaoMap from './KakaoMap';
 import DetailPanel from './DetailPanel';
 import Legend from './Legend';
 import type { LogisticsCenter, CenterStatus, TempType } from '@/types/logistics';
+import {
+  TEMP_META, type Unit, type GfaBucket,
+  inGfaBucket, hasFloorOver10k, hasAvailableFloor,
+} from '@/lib/display';
 
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
@@ -18,6 +22,10 @@ export default function MapLayout() {
   const [search,       setSearch]       = useState('');
   const [tempFilter,   setTempFilter]   = useState<'all' | TempType>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | CenterStatus>('all');
+  const [gfaBucket,    setGfaBucket]    = useState<GfaBucket>('all');
+  const [perFloor10k,  setPerFloor10k]  = useState(false);
+  const [availableOnly, setAvailableOnly] = useState(false);
+  const [unit,         setUnit]         = useState<Unit>('평');
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
   const [mapReady,     setMapReady]     = useState(false);
@@ -58,11 +66,14 @@ export default function MapLayout() {
   }, [loadData]);
 
   const filtered = useMemo(() => centers.filter(c => {
-    const matchSearch = search === '' || c.name.includes(search) || c.address.includes(search);
-    const matchTemp   = tempFilter   === 'all' || c.temp_type === tempFilter;
-    const matchStatus = statusFilter === 'all' || c.status    === statusFilter;
-    return matchSearch && matchTemp && matchStatus;
-  }), [centers, search, tempFilter, statusFilter]);
+    const matchSearch    = search === '' || c.name.includes(search) || c.address.includes(search);
+    const matchTemp      = tempFilter   === 'all' || c.temp_type === tempFilter;
+    const matchStatus    = statusFilter === 'all' || c.status    === statusFilter;
+    const matchGfa       = inGfaBucket(c.gfa, gfaBucket);
+    const matchFloor10k  = !perFloor10k  || hasFloorOver10k(c.floors);
+    const matchAvailable = !availableOnly || hasAvailableFloor(c.floors);
+    return matchSearch && matchTemp && matchStatus && matchGfa && matchFloor10k && matchAvailable;
+  }), [centers, search, tempFilter, statusFilter, gfaBucket, perFloor10k, availableOnly]);
 
   const selectedCenter = useMemo(
     () => centers.find(c => c.id === selectedId) ?? null,
@@ -96,7 +107,6 @@ export default function MapLayout() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
 
-      {/* ✅ Header에 새로고침 props 연결 */}
       <Header
         onRefresh={() => loadData(true)}
         lastUpdated={lastUpdated}
@@ -127,6 +137,10 @@ export default function MapLayout() {
             }}
             tempFilter={tempFilter} onTempFilter={setTempFilter}
             statusFilter={statusFilter} onStatusFilter={setStatusFilter}
+            gfaBucket={gfaBucket} onGfaBucket={setGfaBucket}
+            perFloor10k={perFloor10k} onPerFloor10k={setPerFloor10k}
+            availableOnly={availableOnly} onAvailableOnly={setAvailableOnly}
+            unit={unit} onUnit={setUnit}
             selectedId={selectedId} onSelect={setSelectedId}
           />
         </div>
@@ -153,7 +167,7 @@ export default function MapLayout() {
             {sidebarOpen ? '◀' : '▶'}
           </button>
 
-          {/* ✅ 통계 카드 (새로고침 버튼·갱신시간 제거) */}
+          {/* 통계 카드 */}
           <div style={{
             position: 'absolute', top: '16px', left: '44px',
             background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)',
@@ -164,21 +178,22 @@ export default function MapLayout() {
             <div style={{ fontSize: '10px', color: '#8DA9C4', textTransform: 'uppercase', letterSpacing: '0.5px' }}>표시 중</div>
             <div style={{ fontSize: '22px', fontWeight: 700, color: '#0B2545', lineHeight: 1.1 }}>{stats.total}</div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-              <span style={{ fontSize: '10px', color: '#1d4ed8' }}>🌡 {stats.warm}</span>
-              <span style={{ fontSize: '10px', color: '#1d4ed8' }}>❄ {stats.cold}</span>
-              <span style={{ fontSize: '10px', color: '#1d4ed8' }}>🌡❄ {stats.mixed}</span>
+              <span style={{ fontSize: '10px', fontWeight: 600, color: TEMP_META['상온'].color }}>{TEMP_META['상온'].char} {stats.warm}</span>
+              <span style={{ fontSize: '10px', fontWeight: 600, color: TEMP_META['저온'].color }}>{TEMP_META['저온'].char} {stats.cold}</span>
+              <span style={{ fontSize: '10px', fontWeight: 600, color: TEMP_META['복합'].color }}>{TEMP_META['복합'].char} {stats.mixed}</span>
             </div>
           </div>
 
           <KakaoMap
             allCenters={centers}
             centers={filtered}
+            unit={unit}
             selectedId={selectedId}
             onSelect={setSelectedId}
             onReady={() => setMapReady(true)}
           />
           <Legend />
-          <DetailPanel center={selectedCenter} onClose={() => setSelectedId(null)} />
+          <DetailPanel center={selectedCenter} unit={unit} onClose={() => setSelectedId(null)} />
         </main>
       </div>
     </div>

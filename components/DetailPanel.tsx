@@ -1,15 +1,11 @@
 import type { LogisticsCenter } from '@/types/logistics';
+import { TEMP_META, STATUS_COLOR, fmtSqm, fmtPyeong, type Unit } from '@/lib/display';
 
 interface Props {
   center: LogisticsCenter | null;
+  unit: Unit;
   onClose: () => void;
 }
-
-const TEMP_COLOR = '#1d4ed8';
-const TEMP_ICON: Record<string, string> = { '저온': '❄ 저온', '상온': '🌡 상온', '복합': '🌡❄ 복합' };
-const STATUS_COLOR: Record<string, string> = {
-  '운영중': '#16a34a', '공사중': '#f59e0b', '준공완료': '#ef4444', '미착공': '#94a3b8',
-};
 
 const lbl = (t: string) => (
   <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>{t}</div>
@@ -20,8 +16,9 @@ const val = (v: string | number | null, unit = '') => (
   </div>
 );
 
-export default function DetailPanel({ center, onClose }: Props) {
+export default function DetailPanel({ center, unit, onClose }: Props) {
   const dot = center ? (STATUS_COLOR[center.status] ?? '#94a3b8') : '#94a3b8';
+  const tm  = center ? (TEMP_META[center.temp_type] ?? TEMP_META['상온']) : TEMP_META['상온'];
 
   return (
     <div style={{
@@ -53,8 +50,8 @@ export default function DetailPanel({ center, onClose }: Props) {
             }}>✕</button>
           </div>
           <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
-            <span style={{ background: `${TEMP_COLOR}22`, color: TEMP_COLOR, padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600 }}>
-              {TEMP_ICON[center.temp_type]}
+            <span style={{ background: `${tm.color}22`, color: tm.color, padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600 }}>
+              {center.temp_type}
             </span>
             <span style={{ background: `${dot}22`, color: dot, padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600 }}>
               {center.status}
@@ -65,8 +62,8 @@ export default function DetailPanel({ center, onClose }: Props) {
         {/* 기본 정보 */}
         <Section title="기본 정보">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <div>{lbl('대지면적')}{val(center.land_area, ' ㎡')}</div>
-            <div>{lbl('연면적')}{val(center.gfa, ' ㎡')}</div>
+            <div>{lbl('대지면적')}{val(center.land_area ? `${fmtSqm(center.land_area, unit)} ${unit}` : null)}</div>
+            <div>{lbl('연면적')}{val(center.gfa ? `${fmtSqm(center.gfa, unit)} ${unit}` : null)}</div>
             <div>{lbl('규모')}{val(center.scale)}</div>
             <div>{lbl('주차')}{val(center.parking, '대')}</div>
             <div>{lbl('준공일')}{val(center.completion_date)}</div>
@@ -79,11 +76,11 @@ export default function DetailPanel({ center, onClose }: Props) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '8px' }}>
             <div>
               {lbl('상온 임대료')}
-              {val(center.rental_price_warm ? `${center.rental_price_warm.toLocaleString()}원` : null)}
+              {val(center.rental_price_warm ? `${center.rental_price_warm.toLocaleString()}원/평` : null)}
             </div>
             <div>
               {lbl('저온 임대료')}
-              {val(center.rental_price_cold ? `${center.rental_price_cold.toLocaleString()}원` : null)}
+              {val(center.rental_price_cold ? `${center.rental_price_cold.toLocaleString()}원/평` : null)}
             </div>
           </div>
           {lbl('임대 조건')}
@@ -101,7 +98,7 @@ export default function DetailPanel({ center, onClose }: Props) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                 <thead>
                   <tr style={{ background: '#F5F7FA' }}>
-                    {['층', '용도', '전용(평)', '임대(평)', '입주'].map(h => (
+                    {['층', '용도', `전용(${unit})`, `임대(${unit})`, '입주'].map(h => (
                       <th key={h} style={{ padding: '6px', textAlign: 'center', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #E5E9F0', whiteSpace: 'nowrap' }}>
                         {h}
                       </th>
@@ -116,8 +113,8 @@ export default function DetailPanel({ center, onClose }: Props) {
                       <tr key={i} style={{ borderBottom: '1px solid #F5F7FA' }}>
                         <td style={{ padding: '6px', textAlign: 'center', fontWeight: 600, color: '#0B2545' }}>{f.floor}</td>
                         <td style={{ padding: '6px', textAlign: 'center', color: '#475569' }}>{f.usage}</td>
-                        <td style={{ padding: '6px', textAlign: 'right', color: '#475569' }}>{f.exclusive_area}</td>
-                        <td style={{ padding: '6px', textAlign: 'right', color: '#475569' }}>{f.rental_area}</td>
+                        <td style={{ padding: '6px', textAlign: 'right', color: '#475569' }}>{fmtPyeong(f.exclusive_area, unit)}</td>
+                        <td style={{ padding: '6px', textAlign: 'right', color: '#475569' }}>{fmtPyeong(f.rental_area, unit)}</td>
                         <td style={{ padding: '6px', textAlign: 'center' }}>
                           <span style={{ background: avBg, color: avText, padding: '2px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
                             {f.available}

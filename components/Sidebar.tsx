@@ -1,16 +1,28 @@
 import type { LogisticsCenter, CenterStatus, TempType } from '@/types/logistics';
+import {
+  TEMP_META, STATUS_COLOR, fmtSqm,
+  GFA_BUCKETS, type GfaBucket, type Unit,
+} from '@/lib/display';
 
 interface Props {
   centers: LogisticsCenter[];
   total: number;
   search: string;
   onSearch: (v: string) => void;
-  suggestions: LogisticsCenter[];          // 유지 (MapLayout 호환), 미사용
+  suggestions: LogisticsCenter[];           // 유지 (MapLayout 호환), 미사용
   onSuggestionSelect: (id: string) => void; // 유지 (MapLayout 호환), 미사용
   tempFilter: 'all' | TempType;
   onTempFilter: (v: 'all' | TempType) => void;
   statusFilter: 'all' | CenterStatus;
   onStatusFilter: (v: 'all' | CenterStatus) => void;
+  gfaBucket: GfaBucket;
+  onGfaBucket: (v: GfaBucket) => void;
+  perFloor10k: boolean;
+  onPerFloor10k: (v: boolean) => void;
+  availableOnly: boolean;
+  onAvailableOnly: (v: boolean) => void;
+  unit: Unit;
+  onUnit: (v: Unit) => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }
@@ -24,14 +36,16 @@ const chip = (active: boolean): React.CSSProperties => ({
   whiteSpace: 'nowrap',
 });
 
-const STATUS_COLOR: Record<string, string> = {
-  '운영중': '#16a34a', '공사중': '#f59e0b', '준공완료': '#ef4444', '미착공': '#94a3b8',
+const sectionLabel: React.CSSProperties = {
+  fontSize: '10px', color: '#94a3b8', fontWeight: 600,
+  textTransform: 'uppercase', letterSpacing: '0.4px', margin: '10px 0 5px',
 };
-const TEMP_ICON: Record<string, string> = { '저온': '❄', '상온': '🌡', '복합': '🌡❄' };
 
 export default function Sidebar({
   centers, total, search, onSearch,
   tempFilter, onTempFilter, statusFilter, onStatusFilter,
+  gfaBucket, onGfaBucket, perFloor10k, onPerFloor10k,
+  availableOnly, onAvailableOnly, unit, onUnit,
   selectedId, onSelect,
 }: Props) {
   return (
@@ -40,7 +54,7 @@ export default function Sidebar({
       background: '#fff', borderRight: '1px solid #E5E9F0',
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
-      {/* 검색 (자동완성 제거) */}
+      {/* 검색 + 필터 */}
       <div style={{ padding: '12px', borderBottom: '1px solid #E5E9F0' }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: '8px',
@@ -61,19 +75,59 @@ export default function Sidebar({
         </div>
 
         {/* 온도 필터 */}
-        <div style={{ display: 'flex', gap: '5px', marginTop: '8px', flexWrap: 'wrap' }}>
-          {(['all', '저온', '상온', '복합'] as const).map(v => (
+        <div style={sectionLabel}>온도구분</div>
+        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+          {(['all', '상온', '저온', '복합'] as const).map(v => (
             <button key={v} onClick={() => onTempFilter(v)} style={chip(tempFilter === v)}>
-              {v === 'all' ? '전체' : `${TEMP_ICON[v]} ${v}`}
+              {v === 'all' ? '전체' : v}
             </button>
           ))}
         </div>
 
         {/* 상태 필터 */}
-        <div style={{ display: 'flex', gap: '5px', marginTop: '6px', flexWrap: 'wrap' }}>
-          {(['all', '운영중', '공사중', '준공완료', '미착공'] as const).map(v => (
+        <div style={sectionLabel}>운영상태</div>
+        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+          {(['all', '운영중', '준공완료', '공사중', '미착공'] as const).map(v => (
             <button key={v} onClick={() => onStatusFilter(v)} style={chip(statusFilter === v)}>
-              {v === 'all' ? '전체 상태' : v}
+              {v === 'all' ? '전체' : v}
+            </button>
+          ))}
+        </div>
+
+        {/* 연면적 필터 */}
+        <div style={sectionLabel}>연면적</div>
+        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+          {GFA_BUCKETS.map(b => (
+            <button key={b.key} onClick={() => onGfaBucket(b.key)} style={chip(gfaBucket === b.key)}>
+              {b.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 토글 필터 */}
+        <div style={sectionLabel}>조건</div>
+        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+          <button onClick={() => onPerFloor10k(!perFloor10k)} style={chip(perFloor10k)}>
+            층당 1만평↑
+          </button>
+          <button onClick={() => onAvailableOnly(!availableOnly)} style={chip(availableOnly)}>
+            입주상담 가능
+          </button>
+        </div>
+
+        {/* 단위 토글 */}
+        <div style={sectionLabel}>면적 단위</div>
+        <div style={{
+          display: 'inline-flex', border: '1px solid #E5E9F0', borderRadius: '6px', overflow: 'hidden',
+        }}>
+          {(['평', '㎡'] as Unit[]).map((u, i) => (
+            <button key={u} onClick={() => onUnit(u)} style={{
+              padding: '4px 14px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+              border: 'none', borderLeft: i > 0 ? '1px solid #E5E9F0' : 'none',
+              background: unit === u ? '#0B2545' : '#fff',
+              color: unit === u ? '#fff' : '#64748b',
+            }}>
+              {u}
             </button>
           ))}
         </div>
@@ -90,26 +144,30 @@ export default function Sidebar({
           <div style={{ padding: '32px 16px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
             검색 결과가 없습니다
           </div>
-        ) : centers.map(c => (
-          <div key={c.id} onClick={() => onSelect(c.id)} style={{
-            padding: '12px', borderBottom: '1px solid #E5E9F0', cursor: 'pointer',
-            background: selectedId === c.id ? '#EEF3F9' : '#fff',
-            borderLeft: `3px solid ${selectedId === c.id ? '#0B2545' : 'transparent'}`,
-            transition: 'background .1s',
-          }}>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: '#0B2545', marginBottom: '2px' }}>{c.name}</div>
-            <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '6px' }}>{c.address}</div>
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-              <span style={{ background: '#1d4ed822', color: '#1d4ed8', padding: '2px 6px', borderRadius: '4px', fontSize: '10px' }}>
-                {TEMP_ICON[c.temp_type]} {c.temp_type}
-              </span>
-              <span style={{ background: `${STATUS_COLOR[c.status]}22`, color: STATUS_COLOR[c.status], padding: '2px 6px', borderRadius: '4px', fontSize: '10px' }}>
-                {c.status}
-              </span>
-              <span style={{ fontSize: '10px', color: '#94a3b8', marginLeft: 'auto' }}>{c.gfa.toLocaleString()}㎡</span>
+        ) : centers.map(c => {
+          const tm = TEMP_META[c.temp_type] ?? TEMP_META['상온'];
+          const sc = STATUS_COLOR[c.status] ?? '#94a3b8';
+          return (
+            <div key={c.id} onClick={() => onSelect(c.id)} style={{
+              padding: '12px', borderBottom: '1px solid #E5E9F0', cursor: 'pointer',
+              background: selectedId === c.id ? '#EEF3F9' : '#fff',
+              borderLeft: `3px solid ${selectedId === c.id ? '#0B2545' : 'transparent'}`,
+              transition: 'background .1s',
+            }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#0B2545', marginBottom: '2px' }}>{c.name}</div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '6px' }}>{c.address}</div>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <span style={{ background: `${tm.color}22`, color: tm.color, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
+                  {c.temp_type}
+                </span>
+                <span style={{ background: `${sc}22`, color: sc, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
+                  {c.status}
+                </span>
+                <span style={{ fontSize: '10px', color: '#94a3b8', marginLeft: 'auto' }}>{fmtSqm(c.gfa, unit)} {unit}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </aside>
   );

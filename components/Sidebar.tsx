@@ -1,3 +1,6 @@
+'use client';
+
+import { useRef, useState, useEffect } from 'react';
 import type { LogisticsCenter, CenterStatus, TempType } from '@/types/logistics';
 import {
   TEMP_META, STATUS_COLOR, fmtSqm,
@@ -27,6 +30,9 @@ interface Props {
   onSelect: (id: string) => void;
 }
 
+const ROW_H = 76;       // 리스트 행 고정 높이 (가상화용)
+const OVERSCAN = 6;     // 화면 밖 여유 렌더 행 수
+
 const chip = (active: boolean): React.CSSProperties => ({
   padding: '4px 10px', borderRadius: '20px', fontSize: '11px', cursor: 'pointer',
   border: `1px solid ${active ? '#0B2545' : '#E5E9F0'}`,
@@ -48,6 +54,28 @@ export default function Sidebar({
   availableOnly, onAvailableOnly, unit, onUnit,
   selectedId, onSelect,
 }: Props) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewH, setViewH] = useState(600);
+
+  // 리스트 영역 높이 측정 (가상화 계산용)
+  useEffect(() => {
+    const measure = () => { if (listRef.current) setViewH(listRef.current.clientHeight); };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
+  // 필터가 바뀌어 목록이 줄면 스크롤 위치 초기화
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0;
+    setScrollTop(0);
+  }, [centers.length]);
+
+  const start = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
+  const end   = Math.min(centers.length, Math.ceil((scrollTop + viewH) / ROW_H) + OVERSCAN);
+  const slice = centers.slice(start, end);
+
   return (
     <aside style={{
       width: '280px', height: '100%', flexShrink: 0,
@@ -117,9 +145,7 @@ export default function Sidebar({
 
         {/* 단위 토글 */}
         <div style={sectionLabel}>면적 단위</div>
-        <div style={{
-          display: 'inline-flex', border: '1px solid #E5E9F0', borderRadius: '6px', overflow: 'hidden',
-        }}>
+        <div style={{ display: 'inline-flex', border: '1px solid #E5E9F0', borderRadius: '6px', overflow: 'hidden' }}>
           {(['평', '㎡'] as Unit[]).map((u, i) => (
             <button key={u} onClick={() => onUnit(u)} style={{
               padding: '4px 14px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
@@ -138,36 +164,41 @@ export default function Sidebar({
         {centers.length}개 표시 중 (전체 {total}개)
       </div>
 
-      {/* 리스트 */}
-      <div style={{ overflowY: 'auto', flex: 1 }}>
+      {/* 리스트 (가상화) */}
+      <div ref={listRef} onScroll={e => setScrollTop(e.currentTarget.scrollTop)} style={{ overflowY: 'auto', flex: 1 }}>
         {centers.length === 0 ? (
           <div style={{ padding: '32px 16px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
             검색 결과가 없습니다
           </div>
-        ) : centers.map(c => {
-          const tm = TEMP_META[c.temp_type] ?? TEMP_META['상온'];
-          const sc = STATUS_COLOR[c.status] ?? '#94a3b8';
-          return (
-            <div key={c.id} onClick={() => onSelect(c.id)} style={{
-              padding: '12px', borderBottom: '1px solid #E5E9F0', cursor: 'pointer',
-              background: selectedId === c.id ? '#EEF3F9' : '#fff',
-              borderLeft: `3px solid ${selectedId === c.id ? '#0B2545' : 'transparent'}`,
-              transition: 'background .1s',
-            }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#0B2545', marginBottom: '2px' }}>{c.name}</div>
-              <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '6px' }}>{c.address}</div>
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                <span style={{ background: `${tm.color}22`, color: tm.color, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
-                  {c.temp_type}
-                </span>
-                <span style={{ background: `${sc}22`, color: sc, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
-                  {c.status}
-                </span>
-                <span style={{ fontSize: '10px', color: '#94a3b8', marginLeft: 'auto' }}>{fmtSqm(c.gfa, unit)} {unit}</span>
-              </div>
-            </div>
-          );
-        })}
+        ) : (
+          <div style={{ height: centers.length * ROW_H, position: 'relative' }}>
+            {slice.map((c, i) => {
+              const tm = TEMP_META[c.temp_type] ?? TEMP_META['상온'];
+              const sc = STATUS_COLOR[c.status] ?? '#94a3b8';
+              return (
+                <div key={c.id} onClick={() => onSelect(c.id)} style={{
+                  position: 'absolute', top: (start + i) * ROW_H, left: 0, right: 0, height: ROW_H,
+                  padding: '12px', borderBottom: '1px solid #E5E9F0', cursor: 'pointer',
+                  background: selectedId === c.id ? '#EEF3F9' : '#fff',
+                  borderLeft: `3px solid ${selectedId === c.id ? '#0B2545' : 'transparent'}`,
+                  overflow: 'hidden', boxSizing: 'border-box',
+                }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#0B2545', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.address}</div>
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    <span style={{ background: `${tm.color}22`, color: tm.color, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
+                      {c.temp_type}
+                    </span>
+                    <span style={{ background: `${sc}22`, color: sc, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
+                      {c.status}
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#94a3b8', marginLeft: 'auto' }}>{fmtSqm(c.gfa, unit)} {unit}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </aside>
   );

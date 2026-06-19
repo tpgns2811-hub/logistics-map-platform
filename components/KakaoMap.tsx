@@ -7,8 +7,8 @@ import { TEMP_META, STATUS_COLOR, fmtSqm, type Unit } from '@/lib/display';
 declare global { interface Window { kakao: any; } }
 
 interface Props {
-  centers:     LogisticsCenter[];
-  allCenters?: LogisticsCenter[];
+  centers:     LogisticsCenter[];   // 필터링된 표시 대상
+  allCenters?: LogisticsCenter[];   // 전체 (id 조회용)
   unit:        Unit;
   selectedId:  string | null;
   onSelect:    (id: string | null) => void;
@@ -23,7 +23,7 @@ const MAP_TYPES = [
 ] as const;
 type MapTypeKey = typeof MAP_TYPES[number]['key'];
 
-/* ── 핀 HTML (크기·선택 상태 반영) ── */
+/* ── 핀 HTML ── */
 function pinHTML(c: LogisticsCenter, selected: boolean): string {
   const { color, char } = TEMP_META[c.temp_type] ?? TEMP_META['상온'];
   const dot = STATUS_COLOR[c.status] ?? '#94a3b8';
@@ -44,7 +44,7 @@ function pinHTML(c: LogisticsCenter, selected: boolean): string {
     </div>`;
 }
 
-/* ── 팝업 HTML (마커 DOM 내부 embed) ── */
+/* ── 팝업 HTML ── */
 function popupHTML(c: LogisticsCenter, unit: Unit): string {
   const { color } = TEMP_META[c.temp_type] ?? TEMP_META['상온'];
   const dot = STATUS_COLOR[c.status] ?? '#94a3b8';
@@ -63,26 +63,100 @@ function popupHTML(c: LogisticsCenter, unit: Unit): string {
 }
 
 type OverlayData = {
-  ov:     any;
-  el:     HTMLDivElement;
-  pin:    HTMLDivElement;
-  popup:  HTMLDivElement;
-  center: LogisticsCenter;
+  ov: any; el: HTMLDivElement; pin: HTMLDivElement; popup: HTMLDivElement; center: LogisticsCenter;
 };
 
 export default function KakaoMap({ centers, allCenters, unit, selectedId, onSelect, onReady }: Props) {
   const mapRef        = useRef<HTMLDivElement>(null);
   const mapInst       = useRef<any>(null);
-  const overlays      = useRef<Record<string, OverlayData>>({});
+  const overlays      = useRef<Record<string, OverlayData>>({}); // lazy 생성된 것만
   const inited        = useRef(false);
   const selectedIdRef = useRef<string | null>(selectedId);
   const unitRef       = useRef<Unit>(unit);
+  const filteredRef   = useRef<LogisticsCenter[]>(centers);
+  const centerByIdRef = useRef<Record<string, LogisticsCenter>>({});
   const [mapType, setMapType] = useState<MapTypeKey>('ROADMAP');
 
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
   useEffect(() => { unitRef.current = unit; }, [unit]);
 
-  /* ── 지도 영역 위에서의 페이지 줌 방지 (트랙패드 핀치/Ctrl+휠) ── */
+  // id → center 조회용 (전체 기준)
+  useEffect(() => {
+    const src = allCenters ?? centers;
+    const m: Record<string, LogisticsCenter> = {};
+    src.forEach(c => { m[c.id] = c; });
+    centerByIdRef.current = m;
+  }, [allCenters, centers]);
+
+  /* ── 오버레이 lazy 생성 ── */
+  function ensureOverlay(c: LogisticsCenter): OverlayData {
+    const existing = overlays.current[c.id];
+    if (existing) return existing;
+
+    const el = document.createElement('div');
+    el.style.cssText = 'position:relative;display:inline-block;cursor:pointer;';
+
+    const pin = document.createElement('div');
+    pin.innerHTML = pinHTML(c, c.id === selectedIdRef.current);
+    el.appendChild(pin);
+
+    const popup = document.createElement('div');
+    popup.style.cssText = [
+      'position:absolute', 'bottom:110%', 'left:50%', 'transform:translateX(-50%)',
+      'background:#fff', 'border:1px solid #E5E9F0', 'border-radius:8px',
+      'padding:10px 12px', 'min-width:200px', 'box-shadow:0 4px 16px rgba(0,0,0,.12)',
+      'pointer-events:none', 'z-index:50', 'display:none', 'white-space:nowrap', 'line-height:1.45',
+    ].join(';');
+    popup.innerHTML = popupHTML(c, unitRef.current);
+    el.appendChild(popup);
+
+    el.addEventListener('mouseover', (e: MouseEvent) => {
+      if (el.contains(e.relatedTarget as Node)) return;
+      el.style.transform = 'scale(1.15)';
+      el.style.transition = 'transform .15s ease';
+      if (selectedIdRef.current !== c.id) popup.style.display = 'block';
+    });
+    el.addEventListener('mouseout', (e: MouseEvent) => {
+      if (el.contains(e.relatedTarget as Node)) return;
+      el.style.transform = 'scale(1)';
+      if (selectedIdRef.current !== c.id) popup.style.display = 'none';
+    });
+    el.addEventListener('click', (e: MouseEvent) => {
+      e.stopPropagation();
+      onSelect(c.id);
+    });
+
+    const ov = new window.kakao.maps.CustomOverlay({
+      position: new window.kakao.maps.LatLng(c.latitude, c.longitude),
+      content: el, yAnchor: 1, zIndex: 1,
+    });
+    const data: OverlayData = { ov, el, pin, popup, center: c };
+    overlays.current[c.id] = data;
+    return data;
+  }
+
+  /* ── 화면 안 마커만 표시 (뷰포트 컬링) ── */
+  function refreshMarkers() {
+    const map = mapInst.current;
+    if (!map || !window.kakao) return;
+    const bounds = map.getBounds();
+    const inBounds = (c: LogisticsCenter) =>
+      bounds.contain(new window.kakao.maps.LatLng(c.latitude, c.longitude));
+
+    const filteredIds = new Set<string>();
+    // 1) 화면 안 + 필터통과 → lazy 생성 후 표시
+    filteredRef.current.forEach(c => {
+      filteredIds.add(c.id);
+      if (inBounds(c)) ensureOverlay(c).ov.setMap(map);
+    });
+    // 2) 이미 만들어진 것 중 (필터제외 || 화면밖) → 숨김 (선택된 건 항상 표시)
+    Object.entries(overlays.current).forEach(([id, o]) => {
+      if (id === selectedIdRef.current) { o.ov.setMap(map); return; }
+      o.ov.setMap(filteredIds.has(id) && inBounds(o.center) ? map : null);
+    });
+  }
+
+  /* ── 페이지 줌 방지 ── */
   useEffect(() => {
     const el = mapRef.current;
     if (!el) return;
@@ -112,9 +186,12 @@ export default function KakaoMap({ centers, allCenters, unit, selectedId, onSele
         });
         mapInst.current = map;
         map.addControl(new window.kakao.maps.ZoomControl(), window.kakao.maps.ControlPosition.RIGHT);
-        (allCenters ?? centers).forEach(c => addMarker(c, map));
 
+        filteredRef.current = centers;
+        // 지도 멈출 때마다 화면 안 마커 갱신
+        window.kakao.maps.event.addListener(map, 'idle', refreshMarkers);
         window.kakao.maps.event.addListener(map, 'click', () => onSelect(null));
+        refreshMarkers();
         onReady?.();
       });
     };
@@ -127,33 +204,32 @@ export default function KakaoMap({ centers, allCenters, unit, selectedId, onSele
     }
   }, []);
 
-  /* ── 맵타입 변경 → 핀(CustomOverlay)은 그대로 유지됨 ── */
+  /* ── 맵타입 변경 ── */
   useEffect(() => {
     if (!mapInst.current || !window.kakao) return;
     mapInst.current.setMapTypeId(window.kakao.maps.MapTypeId[mapType]);
   }, [mapType]);
 
-  /* ── 단위 변경 → 팝업 내용 갱신 ── */
+  /* ── 단위 변경 → 생성된 팝업만 갱신 ── */
   useEffect(() => {
     Object.values(overlays.current).forEach(({ popup, center }) => {
       popup.innerHTML = popupHTML(center, unit);
     });
   }, [unit]);
 
-  /* ── 필터 변경 → 핀 표시/숨김 ── */
+  /* ── 필터 변경 → 표시 마커 갱신 ── */
   useEffect(() => {
-    if (!mapInst.current) return;
-    const visible = new Set(centers.map(c => c.id));
-    Object.entries(overlays.current).forEach(([id, { ov }]) => {
-      ov.setMap(visible.has(id) ? mapInst.current : null);
-    });
+    filteredRef.current = centers;
+    refreshMarkers();
   }, [centers]);
 
   /* ── selectedId 변경 ── */
   useEffect(() => {
     selectedIdRef.current = selectedId;
-    if (!mapInst.current) return;
+    const map = mapInst.current;
+    if (!map) return;
 
+    // 생성된 오버레이 핀/팝업 상태 갱신
     Object.entries(overlays.current).forEach(([id, { pin, ov, center, popup }]) => {
       const sel = id === selectedId;
       pin.innerHTML = pinHTML(center, sel);
@@ -162,57 +238,17 @@ export default function KakaoMap({ centers, allCenters, unit, selectedId, onSele
     });
 
     if (!selectedId) return;
-    const target = overlays.current[selectedId]?.center;
-    if (target) {
-      mapInst.current.panTo(new window.kakao.maps.LatLng(target.latitude, target.longitude));
-    }
+    const c = centerByIdRef.current[selectedId];
+    if (!c) return;
+    // 화면 밖이어도 선택 핀은 생성·표시
+    const o = ensureOverlay(c);
+    o.ov.setMap(map);
+    o.pin.innerHTML = pinHTML(c, true);
+    o.ov.setZIndex(10);
+    o.popup.innerHTML = popupHTML(c, unitRef.current);
+    o.popup.style.display = 'block';
+    map.panTo(new window.kakao.maps.LatLng(c.latitude, c.longitude));
   }, [selectedId]);
-
-  /* ── 마커 생성 ── */
-  function addMarker(c: LogisticsCenter, map: any) {
-    const pos = new window.kakao.maps.LatLng(c.latitude, c.longitude);
-
-    const el = document.createElement('div');
-    el.style.cssText = 'position:relative;display:inline-block;cursor:pointer;';
-
-    const pin = document.createElement('div');
-    pin.innerHTML = pinHTML(c, false);
-    el.appendChild(pin);
-
-    const popup = document.createElement('div');
-    popup.style.cssText = [
-      'position:absolute', 'bottom:110%', 'left:50%', 'transform:translateX(-50%)',
-      'background:#fff', 'border:1px solid #E5E9F0', 'border-radius:8px',
-      'padding:10px 12px', 'min-width:200px', 'box-shadow:0 4px 16px rgba(0,0,0,.12)',
-      'pointer-events:none', 'z-index:50', 'display:none', 'white-space:nowrap', 'line-height:1.45',
-    ].join(';');
-    popup.innerHTML = popupHTML(c, unitRef.current);
-    el.appendChild(popup);
-
-    el.addEventListener('mouseover', (e: MouseEvent) => {
-      if (el.contains(e.relatedTarget as Node)) return;
-      el.style.transform = 'scale(1.15)';
-      el.style.transition = 'transform .15s ease';
-      if (selectedIdRef.current !== c.id) popup.style.display = 'block';
-    });
-
-    el.addEventListener('mouseout', (e: MouseEvent) => {
-      if (el.contains(e.relatedTarget as Node)) return;
-      el.style.transform = 'scale(1)';
-      if (selectedIdRef.current !== c.id) popup.style.display = 'none';
-    });
-
-    el.addEventListener('click', (e: MouseEvent) => {
-      e.stopPropagation();
-      onSelect(c.id);
-    });
-
-    const ov = new window.kakao.maps.CustomOverlay({
-      position: pos, content: el, yAnchor: 1, zIndex: 1,
-    });
-    ov.setMap(map);
-    overlays.current[c.id] = { ov, el, pin, popup, center: c };
-  }
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>

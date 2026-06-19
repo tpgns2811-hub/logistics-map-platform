@@ -4,7 +4,8 @@ import { useRef, useState, useEffect } from 'react';
 import type { LogisticsCenter, CenterStatus, TempType } from '@/types/logistics';
 import {
   TEMP_META, STATUS_COLOR, fmtSqm,
-  GFA_BUCKETS, type GfaBucket, type Unit,
+  GFA_PRESETS, GFA_SLIDER_MAX, GFA_STEP, FLOOR_OPTIONS,
+  type GfaRange, type Unit,
 } from '@/lib/display';
 
 interface Props {
@@ -18,10 +19,10 @@ interface Props {
   onTempFilter: (v: 'all' | TempType) => void;
   statusFilter: 'all' | CenterStatus;
   onStatusFilter: (v: 'all' | CenterStatus) => void;
-  gfaBucket: GfaBucket;
-  onGfaBucket: (v: GfaBucket) => void;
-  perFloor10k: boolean;
-  onPerFloor10k: (v: boolean) => void;
+  gfaRange: GfaRange;
+  onGfaRange: (v: GfaRange) => void;
+  floorMin: number;
+  onFloorMin: (v: number) => void;
   availableOnly: boolean;
   onAvailableOnly: (v: boolean) => void;
   unit: Unit;
@@ -30,8 +31,8 @@ interface Props {
   onSelect: (id: string) => void;
 }
 
-const ROW_H = 76;       // 리스트 행 고정 높이 (가상화용)
-const OVERSCAN = 6;     // 화면 밖 여유 렌더 행 수
+const ROW_H = 76;
+const OVERSCAN = 6;
 
 const chip = (active: boolean): React.CSSProperties => ({
   padding: '4px 10px', borderRadius: '20px', fontSize: '11px', cursor: 'pointer',
@@ -47,10 +48,13 @@ const sectionLabel: React.CSSProperties = {
   textTransform: 'uppercase', letterSpacing: '0.4px', margin: '10px 0 5px',
 };
 
+const gfaText = (p: number) =>
+  p >= GFA_SLIDER_MAX ? '최대' : `${p.toLocaleString()}평`;
+
 export default function Sidebar({
   centers, total, search, onSearch,
   tempFilter, onTempFilter, statusFilter, onStatusFilter,
-  gfaBucket, onGfaBucket, perFloor10k, onPerFloor10k,
+  gfaRange, onGfaRange, floorMin, onFloorMin,
   availableOnly, onAvailableOnly, unit, onUnit,
   selectedId, onSelect,
 }: Props) {
@@ -58,7 +62,6 @@ export default function Sidebar({
   const [scrollTop, setScrollTop] = useState(0);
   const [viewH, setViewH] = useState(600);
 
-  // 리스트 영역 높이 측정 (가상화 계산용)
   useEffect(() => {
     const measure = () => { if (listRef.current) setViewH(listRef.current.clientHeight); };
     measure();
@@ -66,7 +69,6 @@ export default function Sidebar({
     return () => window.removeEventListener('resize', measure);
   }, []);
 
-  // 필터가 바뀌어 목록이 줄면 스크롤 위치 초기화
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = 0;
     setScrollTop(0);
@@ -122,22 +124,50 @@ export default function Sidebar({
           ))}
         </div>
 
-        {/* 연면적 필터 */}
+        {/* 연면적 필터: 프리셋 칩 + 슬라이더 */}
         <div style={sectionLabel}>연면적</div>
         <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-          {GFA_BUCKETS.map(b => (
-            <button key={b.key} onClick={() => onGfaBucket(b.key)} style={chip(gfaBucket === b.key)}>
-              {b.label}
-            </button>
-          ))}
+          {GFA_PRESETS.map(p => {
+            const active = gfaRange[0] === p.min && gfaRange[1] === p.max;
+            return (
+              <button key={p.label} onClick={() => onGfaRange([p.min, p.max])} style={chip(active)}>
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: '8px', padding: '0 2px' }}>
+          <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px', textAlign: 'center' }}>
+            {gfaText(gfaRange[0])} ~ {gfaText(gfaRange[1])}
+          </div>
+          {/* 최소 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '9px', color: '#94a3b8', width: '20px' }}>최소</span>
+            <input
+              type="range" min={0} max={GFA_SLIDER_MAX} step={GFA_STEP} value={gfaRange[0]}
+              onChange={e => onGfaRange([Math.min(+e.target.value, gfaRange[1]), gfaRange[1]])}
+              style={{ flex: 1, accentColor: '#0B2545' }}
+            />
+          </div>
+          {/* 최대 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+            <span style={{ fontSize: '9px', color: '#94a3b8', width: '20px' }}>최대</span>
+            <input
+              type="range" min={0} max={GFA_SLIDER_MAX} step={GFA_STEP} value={gfaRange[1]}
+              onChange={e => onGfaRange([gfaRange[0], Math.max(+e.target.value, gfaRange[0])])}
+              style={{ flex: 1, accentColor: '#0B2545' }}
+            />
+          </div>
         </div>
 
-        {/* 토글 필터 */}
+        {/* 조건: 층 임계값(택1) + 입주상담 */}
         <div style={sectionLabel}>조건</div>
         <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-          <button onClick={() => onPerFloor10k(!perFloor10k)} style={chip(perFloor10k)}>
-            층당 1만평↑
-          </button>
+          {FLOOR_OPTIONS.map(o => (
+            <button key={o.value} onClick={() => onFloorMin(o.value)} style={chip(floorMin === o.value)}>
+              {o.label}
+            </button>
+          ))}
           <button onClick={() => onAvailableOnly(!availableOnly)} style={chip(availableOnly)}>
             입주상담 가능
           </button>

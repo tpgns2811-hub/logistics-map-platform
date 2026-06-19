@@ -8,8 +8,8 @@ import DetailPanel from './DetailPanel';
 import Legend from './Legend';
 import type { LogisticsCenter, CenterStatus, TempType } from '@/types/logistics';
 import {
-  TEMP_META, type Unit, type GfaBucket,
-  inGfaBucket, hasFloorOver10k, hasAvailableFloor,
+  TEMP_META, type Unit, type GfaRange,
+  GFA_SLIDER_MAX, gfaToPyeong, hasFloorOver, hasAvailableFloor,
 } from '@/lib/display';
 
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
@@ -22,8 +22,8 @@ export default function MapLayout() {
   const [search,       setSearch]       = useState('');
   const [tempFilter,   setTempFilter]   = useState<'all' | TempType>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | CenterStatus>('all');
-  const [gfaBucket,    setGfaBucket]    = useState<GfaBucket>('all');
-  const [perFloor10k,  setPerFloor10k]  = useState(false);
+  const [gfaRange,     setGfaRange]     = useState<GfaRange>([0, GFA_SLIDER_MAX]);
+  const [floorMin,     setFloorMin]     = useState(0);
   const [availableOnly, setAvailableOnly] = useState(false);
   const [unit,         setUnit]         = useState<Unit>('평');
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
@@ -69,11 +69,12 @@ export default function MapLayout() {
     const matchSearch    = search === '' || c.name.includes(search) || c.address.includes(search);
     const matchTemp      = tempFilter   === 'all' || c.temp_type === tempFilter;
     const matchStatus    = statusFilter === 'all' || c.status    === statusFilter;
-    const matchGfa       = inGfaBucket(c.gfa, gfaBucket);
-    const matchFloor10k  = !perFloor10k  || hasFloorOver10k(c.floors);
+    const p              = gfaToPyeong(c.gfa);
+    const matchGfa       = p >= gfaRange[0] && p <= gfaRange[1];
+    const matchFloor     = floorMin === 0 || hasFloorOver(c.floors, floorMin);
     const matchAvailable = !availableOnly || hasAvailableFloor(c.floors);
-    return matchSearch && matchTemp && matchStatus && matchGfa && matchFloor10k && matchAvailable;
-  }), [centers, search, tempFilter, statusFilter, gfaBucket, perFloor10k, availableOnly]);
+    return matchSearch && matchTemp && matchStatus && matchGfa && matchFloor && matchAvailable;
+  }), [centers, search, tempFilter, statusFilter, gfaRange, floorMin, availableOnly]);
 
   const selectedCenter = useMemo(
     () => centers.find(c => c.id === selectedId) ?? null,
@@ -137,8 +138,8 @@ export default function MapLayout() {
             }}
             tempFilter={tempFilter} onTempFilter={setTempFilter}
             statusFilter={statusFilter} onStatusFilter={setStatusFilter}
-            gfaBucket={gfaBucket} onGfaBucket={setGfaBucket}
-            perFloor10k={perFloor10k} onPerFloor10k={setPerFloor10k}
+            gfaRange={gfaRange} onGfaRange={setGfaRange}
+            floorMin={floorMin} onFloorMin={setFloorMin}
             availableOnly={availableOnly} onAvailableOnly={setAvailableOnly}
             unit={unit} onUnit={setUnit}
             selectedId={selectedId} onSelect={setSelectedId}

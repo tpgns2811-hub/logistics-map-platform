@@ -23,6 +23,8 @@ const MAP_TYPES = [
 ] as const;
 type MapTypeKey = typeof MAP_TYPES[number]['key'];
 
+const Z_HOVER = 1000; // 호버 시 다른 핀보다 무조건 위
+
 /* ── 핀 HTML ── */
 function pinHTML(c: LogisticsCenter, selected: boolean): string {
   const { color, char } = TEMP_META[c.temp_type] ?? TEMP_META['상온'];
@@ -69,7 +71,7 @@ type OverlayData = {
 export default function KakaoMap({ centers, allCenters, unit, selectedId, onSelect, onReady }: Props) {
   const mapRef        = useRef<HTMLDivElement>(null);
   const mapInst       = useRef<any>(null);
-  const overlays      = useRef<Record<string, OverlayData>>({}); // lazy 생성된 것만
+  const overlays      = useRef<Record<string, OverlayData>>({});
   const inited        = useRef(false);
   const selectedIdRef = useRef<string | null>(selectedId);
   const unitRef       = useRef<Unit>(unit);
@@ -80,13 +82,15 @@ export default function KakaoMap({ centers, allCenters, unit, selectedId, onSele
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
   useEffect(() => { unitRef.current = unit; }, [unit]);
 
-  // id → center 조회용 (전체 기준)
   useEffect(() => {
     const src = allCenters ?? centers;
     const m: Record<string, LogisticsCenter> = {};
     src.forEach(c => { m[c.id] = c; });
     centerByIdRef.current = m;
   }, [allCenters, centers]);
+
+  // 선택 아닌 핀의 기본 zIndex 복원값
+  const baseZ = (id: string) => (id === selectedIdRef.current ? 10 : 1);
 
   /* ── 오버레이 lazy 생성 ── */
   function ensureOverlay(c: LogisticsCenter): OverlayData {
@@ -114,11 +118,13 @@ export default function KakaoMap({ centers, allCenters, unit, selectedId, onSele
       if (el.contains(e.relatedTarget as Node)) return;
       el.style.transform = 'scale(1.15)';
       el.style.transition = 'transform .15s ease';
+      overlays.current[c.id]?.ov.setZIndex(Z_HOVER); // 미리보기 가림 방지: 최상단
       if (selectedIdRef.current !== c.id) popup.style.display = 'block';
     });
     el.addEventListener('mouseout', (e: MouseEvent) => {
       if (el.contains(e.relatedTarget as Node)) return;
       el.style.transform = 'scale(1)';
+      overlays.current[c.id]?.ov.setZIndex(baseZ(c.id)); // 복원
       if (selectedIdRef.current !== c.id) popup.style.display = 'none';
     });
     el.addEventListener('click', (e: MouseEvent) => {
@@ -144,12 +150,10 @@ export default function KakaoMap({ centers, allCenters, unit, selectedId, onSele
       bounds.contain(new window.kakao.maps.LatLng(c.latitude, c.longitude));
 
     const filteredIds = new Set<string>();
-    // 1) 화면 안 + 필터통과 → lazy 생성 후 표시
     filteredRef.current.forEach(c => {
       filteredIds.add(c.id);
       if (inBounds(c)) ensureOverlay(c).ov.setMap(map);
     });
-    // 2) 이미 만들어진 것 중 (필터제외 || 화면밖) → 숨김 (선택된 건 항상 표시)
     Object.entries(overlays.current).forEach(([id, o]) => {
       if (id === selectedIdRef.current) { o.ov.setMap(map); return; }
       o.ov.setMap(filteredIds.has(id) && inBounds(o.center) ? map : null);
@@ -188,7 +192,6 @@ export default function KakaoMap({ centers, allCenters, unit, selectedId, onSele
         map.addControl(new window.kakao.maps.ZoomControl(), window.kakao.maps.ControlPosition.RIGHT);
 
         filteredRef.current = centers;
-        // 지도 멈출 때마다 화면 안 마커 갱신
         window.kakao.maps.event.addListener(map, 'idle', refreshMarkers);
         window.kakao.maps.event.addListener(map, 'click', () => onSelect(null));
         refreshMarkers();
@@ -229,7 +232,6 @@ export default function KakaoMap({ centers, allCenters, unit, selectedId, onSele
     const map = mapInst.current;
     if (!map) return;
 
-    // 생성된 오버레이 핀/팝업 상태 갱신
     Object.entries(overlays.current).forEach(([id, { pin, ov, center, popup }]) => {
       const sel = id === selectedId;
       pin.innerHTML = pinHTML(center, sel);
@@ -240,7 +242,7 @@ export default function KakaoMap({ centers, allCenters, unit, selectedId, onSele
     if (!selectedId) return;
     const c = centerByIdRef.current[selectedId];
     if (!c) return;
-    // 화면 밖이어도 선택 핀은 생성·표시
+    if (!c.latitude || !c.longitude) return; // 좌표 없는 센터는 맵 점프 방지
     const o = ensureOverlay(c);
     o.ov.setMap(map);
     o.pin.innerHTML = pinHTML(c, true);

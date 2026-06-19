@@ -3,6 +3,7 @@ import type { TempType, CenterStatus } from '@/types/logistics';
 /* ── 표시 단위 ── */
 export type Unit = '평' | '㎡';
 export const PYEONG = 3.3058; // 1평 = 3.3058㎡
+export const gfaToPyeong = (sqm: number) => sqm / PYEONG;
 
 /* ── 온도구분 색/글자 (마커·범례·리스트·상세 공통) ── */
 export const TEMP_META: Record<TempType, { color: string; char: string }> = {
@@ -31,28 +32,31 @@ export function fmtPyeong(raw: string | number, unit: Unit): string {
   return (Math.round(v * 10) / 10).toLocaleString();
 }
 
-/* ── 전체 연면적 버킷 (평 기준 — 물류 업계 관용) ── */
-export type GfaBucket = 'all' | 'u1' | '1to3' | 'o3';
-export const GFA_BUCKETS: { key: GfaBucket; label: string }[] = [
-  { key: 'all',  label: '전체'    },
-  { key: 'u1',   label: '~1만평'  },
-  { key: '1to3', label: '1~3만평' },
-  { key: 'o3',   label: '3만평+'  },
+/* ── 연면적(평) 슬라이더 / 프리셋 ── */
+export const GFA_SLIDER_MAX = 150000; // 평 (데이터 최대 ~13만평 커버)
+export const GFA_STEP = 1000;         // 평
+export type GfaRange = [number, number]; // [min, max] 평
+export const GFA_PRESETS: { label: string; min: number; max: number }[] = [
+  { label: '전체',    min: 0,     max: GFA_SLIDER_MAX },
+  { label: '~1만평',  min: 0,     max: 10000 },
+  { label: '1~3만평', min: 10000, max: 30000 },
+  { label: '3만평+',  min: 30000, max: GFA_SLIDER_MAX },
 ];
-export function inGfaBucket(gfaSqm: number, bucket: GfaBucket): boolean {
-  if (bucket === 'all') return true;
-  const pyeong = gfaSqm / PYEONG;
-  if (bucket === 'u1')   return pyeong < 10000;
-  if (bucket === '1to3') return pyeong >= 10000 && pyeong < 30000;
-  return pyeong >= 30000; // 'o3'
-}
+
+/* ── 층별 임계값(평) 옵션 ── */
+export const FLOOR_OPTIONS: { value: number; label: string }[] = [
+  { value: 0,     label: '전체' },
+  { value: 5000,  label: '층당 5천평↑' },
+  { value: 10000, label: '층당 1만평↑' },
+];
 
 /* ── 층별 필터 판정 (Floors 기반) ── */
-// 한 층이라도 임대면적 ≥ 10,000평
-export function hasFloorOver10k(floors: { rental_area: string }[]): boolean {
+// 한 층이라도 임대면적 ≥ threshold(평)
+export function hasFloorOver(floors: { rental_area: string }[], threshold: number): boolean {
+  if (!threshold) return true;
   return floors.some(f => {
     const a = parseFloat(String(f.rental_area).replace(/,/g, ''));
-    return isFinite(a) && a >= 10000;
+    return isFinite(a) && a >= threshold;
   });
 }
 // 한 층이라도 입주상담 가능(임대완료/공란이 아닌 값)

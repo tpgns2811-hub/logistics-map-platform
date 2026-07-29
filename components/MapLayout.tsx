@@ -42,11 +42,11 @@ export default function MapLayout() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  const loadData = useCallback(async (silent = false) => {
+  const loadData = useCallback(async (silent = false, force = false) => {
     if (silent) { setRefreshing(true); }
     else        { setDataLoading(true); }
     try {
-      const res = await fetch('/api/centers');
+      const res = await fetch(force ? '/api/centers?force=1' : '/api/centers');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const { centers: data, updatedAt } = await res.json();
       setCenters(data);
@@ -109,7 +109,7 @@ export default function MapLayout() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
 
       <Header
-        onRefresh={() => loadData(true)}
+        onRefresh={() => loadData(true, true)}
         lastUpdated={lastUpdated}
         refreshing={refreshing}
       />

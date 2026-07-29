@@ -14,7 +14,7 @@ export const TEMP_META: Record<TempType, { color: string; char: string }> = {
 
 /* ── 운영상태 색 ── */
 export const STATUS_COLOR: Record<CenterStatus, string> = {
-  '운영중': '#16a34a', '준공완료': '#ef4444', '공사중': '#f59e0b', '미착공': '#94a3b8',
+  '운영중': '#16a34a', '공사중': '#f59e0b', '미착공': '#94a3b8',
 };
 
 /* ── ㎡로 저장된 값(LM_Data: land_area/gfa) 표시 ── */

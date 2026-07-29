@@ -58,7 +58,8 @@ function parseSheet1(csv: string): Omit<LogisticsCenter, 'floors'>[] {
         province,
         city,
         district,
-        address:           `${province} ${city} ${district}`.trim(),
+        // 시트에 정확 지번 주소(address)가 있으면 그걸 우선 사용, 없으면 기존처럼 조합
+        address:           o.address || `${province} ${city} ${district}`.trim(),
         latitude:          parseFloat(o.latitude)  || 0,
         longitude:         parseFloat(o.longitude) || 0,
         developer:         o.developer,
@@ -74,7 +75,11 @@ function parseSheet1(csv: string): Omit<LogisticsCenter, 'floors'>[] {
         rental_price_cold: o.rental_price_cold ? parseInt(o.rental_price_cold) : null,
         // 헤더 콤마 누락(`rental_conditions image`) 보정
         rental_conditions: o.rental_conditions ?? o['rental_conditions image'] ?? '',
-        image:             o.image ?? '',
+        image:                    o.image ?? '',
+        permit_date:              o.permit_date ?? '',
+        construction_start_date:  o.construction_start_date ?? '',
+        remarks:                  o.remarks ?? '',
+        history:                  o.history ?? '',
       };
     })
     .filter(c => c.id);
@@ -120,9 +125,16 @@ function splitAddress(full: string) {
   };
 }
 
+/* 구글 시트 CSV는 자주 안 바뀌므로 짧은 기간(2분) 서버 캐시를 둔다.
+   "새로고침" 버튼(force=true)만 캐시를 건너뛰고 즉시 최신본을 가져온다. */
+const REVALIDATE_SECONDS = 120;
+
 /* ── 메인 함수 ── */
-export async function fetchCenters(): Promise<LogisticsCenter[]> {
+export async function fetchCenters(force = false): Promise<LogisticsCenter[]> {
   const useSheets = !!SHEET1_URL;
+  const fetchOpts = force
+    ? { cache: 'no-store' as const }
+    : { next: { revalidate: REVALIDATE_SECONDS } };
 
   if (!useSheets) {
     const raw = (await import('@/data/logisticsCenters.json')).default as any[];
@@ -130,15 +142,21 @@ export async function fetchCenters(): Promise<LogisticsCenter[]> {
       const { province, city, district } = splitAddress(c.address ?? '');
       const floors: FloorInfo[] =
         (localFloorsData as Record<string, FloorInfo[]>)[c.id] ?? [];
-      return { ...c, province, city, district, floors } as LogisticsCenter;
+      return {
+        ...c, province, city, district, floors,
+        permit_date: c.permit_date ?? '',
+        construction_start_date: c.construction_start_date ?? '',
+        remarks: c.remarks ?? '',
+        history: c.history ?? '',
+      } as LogisticsCenter;
     });
   }
 
   try {
     const [csv1, csv2] = await Promise.all([
-      fetch(SHEET1_URL, { cache: 'no-store' }).then(r => r.text()),
+      fetch(SHEET1_URL, fetchOpts).then(r => r.text()),
       SHEET2_URL
-        ? fetch(SHEET2_URL, { cache: 'no-store' }).then(r => r.text())
+        ? fetch(SHEET2_URL, fetchOpts).then(r => r.text())
         : Promise.resolve(''),
     ]);
 
@@ -157,7 +175,13 @@ export async function fetchCenters(): Promise<LogisticsCenter[]> {
       const { province, city, district } = splitAddress(c.address ?? '');
       const floors: FloorInfo[] =
         (localFloorsData as Record<string, FloorInfo[]>)[c.id] ?? [];
-      return { ...c, province, city, district, floors } as LogisticsCenter;
+      return {
+        ...c, province, city, district, floors,
+        permit_date: c.permit_date ?? '',
+        construction_start_date: c.construction_start_date ?? '',
+        remarks: c.remarks ?? '',
+        history: c.history ?? '',
+      } as LogisticsCenter;
     });
   }
 }

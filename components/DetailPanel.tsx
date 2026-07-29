@@ -59,6 +59,19 @@ export default function DetailPanel({ center, unit, onClose }: Props) {
           </div>
         </div>
 
+        {/* 사진(배치도/전경) */}
+        {center.image && (
+          <div style={{ padding: '16px', borderBottom: '1px solid #F5F7FA' }}>
+            <img
+              src={center.image}
+              alt={`${center.name} 사진`}
+              loading="lazy"
+              style={{ width: '100%', borderRadius: '8px', display: 'block', objectFit: 'cover', maxHeight: '220px' }}
+              onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; }}
+            />
+          </div>
+        )}
+
         {/* 기본 정보 */}
         <Section title="기본 정보">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -66,6 +79,8 @@ export default function DetailPanel({ center, unit, onClose }: Props) {
             <div>{lbl('연면적')}{val(center.gfa ? `${fmtSqm(center.gfa, unit)} ${unit}` : null)}</div>
             <div>{lbl('규모')}{val(center.scale)}</div>
             <div>{lbl('주차')}{val(center.parking, '대')}</div>
+            <div>{lbl('허가일')}{val(center.permit_date)}</div>
+            <div>{lbl('착공일')}{val(center.construction_start_date)}</div>
             <div>{lbl('준공일')}{val(center.completion_date)}</div>
             <div>{lbl('개발사')}{val(center.developer)}</div>
           </div>
@@ -86,6 +101,15 @@ export default function DetailPanel({ center, unit, onClose }: Props) {
           {lbl('임대 조건')}
           {val(center.rental_conditions)}
         </Section>
+
+        {/* 비고 */}
+        {center.remarks && (
+          <Section title="비고">
+            <div style={{ fontSize: '12px', color: '#475569', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+              {center.remarks}
+            </div>
+          </Section>
+        )}
 
         {/* 층별 현황 */}
         <Section title="층별 현황">

@@ -5,10 +5,9 @@ export default function Legend() {
     { color: '#2563eb', char: '저', label: '저온' },
     { color: '#7c3aed', char: '복', label: '복합' },
   ];
-  // 운영상태: 운영중 → 준공완료 → 공사중 → 미착공
+  // 운영상태: 운영중 → 공사중 → 미착공
   const dots = [
     { color: '#16a34a', label: '운영중'  },
-    { color: '#ef4444', label: '준공완료' },
     { color: '#f59e0b', label: '공사중'  },
     { color: '#94a3b8', label: '미착공'  },
   ];

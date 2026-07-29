@@ -1,6 +1,6 @@
 export type TempType = '저온' | '상온' | '복합';
 
-export type CenterStatus = '운영중' | '공사중' | '준공완료' | '미착공';
+export type CenterStatus = '운영중' | '공사중' | '미착공';
 
 export interface FloorInfo {
   floor: string;          // 층 (예: "B1", "1F", "2F")
@@ -33,4 +33,8 @@ export interface LogisticsCenter {
   rental_conditions: string;        // 임대 조건
   floors: FloorInfo[];              // 층별 정보
   image: string;
+  permit_date: string;              // 허가일
+  construction_start_date: string;  // 착공일
+  remarks: string;                  // 비고
+  history: string;                  // 변경 이력
 }

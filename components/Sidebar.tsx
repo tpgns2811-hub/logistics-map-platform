@@ -168,7 +168,7 @@ export default function Sidebar({
             {/* 상태 */}
             <div style={sectionLabel}>운영상태</div>
             <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-              {(['all', '운영중', '준공완료', '공사중', '미착공'] as const).map(v => (
+              {(['all', '운영중', '공사중', '미착공'] as const).map(v => (
                 <button key={v} onClick={() => onStatusFilter(v)} style={chip(statusFilter === v)}>
                   {v === 'all' ? '전체' : v}
                 </button>

@@ -69,23 +69,86 @@ type OverlayData = {
   ov: any; el: HTMLDivElement; pin: HTMLDivElement; popup: HTMLDivElement; center: LogisticsCenter;
 };
 
-type ClusterData = { ov: any; el: HTMLDivElement; count: number; name: string };
+type TempCounts = { 상온: number; 저온: number; 복합: number };
+type ClusterData = { ov: any; el: HTMLDivElement; count: number; temp: TempCounts; polys: any[] };
 
-const REGION_CLUSTER_LEVEL = 7; // 지도 레벨이 이 값 이상(축소)이면 시/군/구 단위로 묶어서 개수만 표시, 미만이면 개별 핀
+type BoundaryFeature = { name: string; rings: number[][][] };
+
+// 지도 레벨(클수록 축소): PROVINCE_LEVEL 이상 = 도(서울/경기도/인천) 단위,
+// REGION_LEVEL~PROVINCE_LEVEL-1 = 시/군/구 단위, DISTRICT_LEVEL~REGION_LEVEL-1 = 구/읍면 단위(분리 가능한 시만), 그 미만 = 개별 핀
+const PROVINCE_LEVEL = 10;
+const REGION_LEVEL = 8;
+const DISTRICT_LEVEL = 6;
+
+// 구/군으로 나뉘어 있고 경계 데이터도 있는 시 — 이 시들만 중간 축척에서 한 단계 더 쪼갬
+const SPLIT_CITIES = new Set(['수원시', '성남시', '안양시', '안산시', '고양시', '용인시']);
+
+// 한 단계 확대: 도 -> 시/군/구 -> 구/읍면 -> 개별 건물 순으로 정확히 다음 단계까지만 줌인
+function stepDownLevel(level: number): number {
+  if (level >= PROVINCE_LEVEL) return PROVINCE_LEVEL - 1;
+  if (level >= REGION_LEVEL) return REGION_LEVEL - 1;
+  if (level >= DISTRICT_LEVEL) return DISTRICT_LEVEL - 1;
+  return Math.max(1, level - 2);
+}
+
+// 도(서울특별시/경기도/인천광역시) 단위
+function provinceKey(c: LogisticsCenter): string {
+  return c.province || '기타';
+}
 
 // 시(이천시/여주시 등)가 있으면 시 단위로, 서울처럼 city===province인 경우엔 구 단위로 묶음
 function regionKey(c: LogisticsCenter): string {
   return c.city && c.city !== c.province ? c.city : (c.district || c.city || c.province || '기타');
 }
 
-function clusterPinHTML(name: string, count: number): string {
+// 중간 축척: 구/군 분리 가능한 시는 "시+구" 단위로, 그 외에는 regionKey와 동일(더 쪼갤 경계 데이터가 없음)
+function districtKey(c: LogisticsCenter): string {
+  if (c.city && c.city !== c.province && SPLIT_CITIES.has(c.city) && c.district) return `${c.city}${c.district}`;
+  return regionKey(c);
+}
+
+// 경계 lookup·그룹핑엔 붙여쓴 key를 쓰되, 배지에 보여줄 땐 "시 구"처럼 띄어서 표시
+function regionLabel(key: string): string {
+  for (const city of SPLIT_CITIES) {
+    if (key.startsWith(city) && key.length > city.length) return `${city} ${key.slice(city.length)}`;
+  }
+  return key;
+}
+
+// data/regionBoundaries.json은 수도권 시/군/구 경계만 추려둔 정적 자산(호버 시에만 필요해서 지연 로드)
+let boundariesPromise: Promise<BoundaryFeature[]> | null = null;
+function loadBoundaries(): Promise<BoundaryFeature[]> {
+  if (!boundariesPromise) {
+    boundariesPromise = import('@/data/regionBoundaries.json').then(m => (m as any).default ?? (m as any));
+  }
+  return boundariesPromise;
+}
+// "용인시" -> 용인시 전체(구 3개 폴리곤 합), "용인시처인구" -> 그 구 하나만, 둘 다 startsWith로 커버됨
+function getBoundaryRings(list: BoundaryFeature[], key: string): number[][][] {
+  return list.filter(f => f.name === key || f.name.startsWith(key)).flatMap(f => f.rings);
+}
+
+// 도넛 링 = 그 지역 건물들의 온도구성(상온/저온/복합) 비율 — 개별 핀·범례와 같은 TEMP_META 색상 사용
+function clusterPinHTML(temp: TempCounts, label: string): string {
+  const count = temp.상온 + temp.저온 + temp.복합;
+  const p1 = (temp.상온 / count) * 100;
+  const p2 = p1 + (temp.저온 / count) * 100;
+  const sz  = count >= 100 ? 58 : count >= 30 ? 50 : 42;
+  const inner = sz - 14;
+  const fsz = count >= 100 ? 17 : count >= 30 ? 15 : 13;
   return `
-    <div style="display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:20px;
-      background:#0B2545;border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.35);
-      cursor:pointer;white-space:nowrap;">
-      <span style="font-size:12px;font-weight:700;color:#fff;">${name}</span>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;">
+      <div style="width:${sz}px;height:${sz}px;border-radius:50%;
+        background:conic-gradient(${TEMP_META['상온'].color} 0% ${p1}%, ${TEMP_META['저온'].color} ${p1}% ${p2}%, ${TEMP_META['복합'].color} ${p2}% 100%);
+        border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.35);
+        display:flex;align-items:center;justify-content:center;">
+        <div style="width:${inner}px;height:${inner}px;border-radius:50%;background:#fff;
+          display:flex;align-items:center;justify-content:center;">
+          <span style="font-size:${fsz}px;font-weight:700;color:#0B2545;line-height:1;">${count}</span>
+        </div>
+      </div>
       <span style="font-size:11px;font-weight:700;color:#0B2545;background:#fff;
-        border-radius:10px;padding:1px 7px;min-width:18px;text-align:center;">${count}</span>
+        padding:1px 8px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.2);white-space:nowrap;">${label}</span>
     </div>`;
 }
 
@@ -164,33 +227,84 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
     return data;
   }
 
-  /* ── 클러스터 오버레이 lazy 생성/재사용 ── */
-  function ensureCluster(key: string, name: string, lat: number, lng: number, count: number): ClusterData {
+  /* ── 클러스터 오버레이 lazy 생성/재사용 ──
+     호버 시 loadBoundaries()로 해당 지역 행정경계 폴리곤을 지도 위에 그려서 강조,
+     마우스가 벗어나면 지움 (경계 데이터는 첫 호버 때 한 번만 지연 로드) */
+  function ensureCluster(key: string, lat: number, lng: number, temp: TempCounts): ClusterData {
+    const count = temp.상온 + temp.저온 + temp.복합;
     const existing = clusters.current[key];
     if (existing) {
-      if (existing.count !== count) { existing.count = count; existing.el.innerHTML = clusterPinHTML(name, count); }
+      if (existing.count !== count) {
+        existing.count = count; existing.temp = temp;
+        existing.el.innerHTML = clusterPinHTML(temp, regionLabel(key));
+      }
       existing.ov.setPosition(new window.kakao.maps.LatLng(lat, lng));
       return existing;
     }
     const el = document.createElement('div');
-    el.innerHTML = clusterPinHTML(name, count);
+    el.innerHTML = clusterPinHTML(temp, regionLabel(key));
+    const data: ClusterData = { ov: null, el, count, temp, polys: [] };
+
+    el.addEventListener('mouseover', () => {
+      el.style.transform = 'scale(1.08)';
+      el.style.transition = 'transform .15s ease';
+      loadBoundaries().then(list => {
+        data.polys.forEach(p => p.setMap(null));
+        data.polys = getBoundaryRings(list, key).map(ring => {
+          const poly = new window.kakao.maps.Polygon({
+            path: ring.map(([lat2, lng2]) => new window.kakao.maps.LatLng(lat2, lng2)),
+            strokeWeight: 3, strokeColor: '#0B2545', strokeOpacity: 0.85,
+            fillColor: '#0B2545', fillOpacity: 0.16,
+          });
+          poly.setMap(mapInst.current);
+          return poly;
+        });
+      });
+    });
+    el.addEventListener('mouseout', () => {
+      el.style.transform = 'scale(1)';
+      data.polys.forEach(p => p.setMap(null));
+      data.polys = [];
+    });
     el.addEventListener('click', (e: MouseEvent) => {
       e.stopPropagation();
       const map = mapInst.current;
       if (!map) return;
-      map.setLevel(REGION_CLUSTER_LEVEL - 2, { anchor: new window.kakao.maps.LatLng(lat, lng) });
+      map.setLevel(stepDownLevel(map.getLevel()), { anchor: new window.kakao.maps.LatLng(lat, lng) });
     });
+
     const ov = new window.kakao.maps.CustomOverlay({
       position: new window.kakao.maps.LatLng(lat, lng), content: el, yAnchor: 0.5, zIndex: 5,
     });
-    const data: ClusterData = { ov, el, count, name };
+    data.ov = ov;
     clusters.current[key] = data;
     return data;
   }
 
-  /* ── 화면 안 마커만 표시 + 시/군/구 단위 클러스터링 (뷰포트 컬링) ──
+  function groupAndShowClusters(map: any, visible: LogisticsCenter[], keyFn: (c: LogisticsCenter) => string) {
+    const groups = new Map<string, LogisticsCenter[]>();
+    visible.forEach(c => {
+      if (c.id === selectedIdRef.current) return; // 선택 건물은 아래서 항상 단독 처리
+      const key = keyFn(c);
+      const arr = groups.get(key);
+      if (arr) arr.push(c); else groups.set(key, [c]);
+    });
+    const nextClusterKeys = new Set<string>();
+    groups.forEach((members, key) => {
+      const lat = members.reduce((s, m) => s + m.latitude, 0) / members.length;
+      const lng = members.reduce((s, m) => s + m.longitude, 0) / members.length;
+      const temp: TempCounts = { 상온: 0, 저온: 0, 복합: 0 };
+      members.forEach(m => { temp[m.temp_type] = (temp[m.temp_type] ?? 0) + 1; });
+      ensureCluster(key, lat, lng, temp).ov.setMap(map);
+      nextClusterKeys.add(key);
+    });
+    return nextClusterKeys;
+  }
+
+  /* ── 화면 안 마커만 표시 + 시/군/구(→구/읍면) 단계적 클러스터링 (뷰포트 컬링) ──
      축소 상태에서 수백 개 핀이 동시에 DOM 오버레이로 뜨는 게 렉의 주 원인이라
-     레벨이 REGION_CLUSTER_LEVEL 이상이면 행정구역(시/군/구)별로 묶어서 "지역명 개수" 배지 하나로 표시,
+     PROVINCE_LEVEL 이상은 도(서울/경기도/인천) 단위, REGION_LEVEL~PROVINCE_LEVEL-1은 시/군/구 단위,
+     DISTRICT_LEVEL~REGION_LEVEL-1은 구/읍면 단위(분리 가능한 시만)로 묶어서 "지역명 개수" 배지로 표시하고,
      그보다 확대하면 건물별 개별 핀으로 전환 */
   function refreshMarkers() {
     const map = mapInst.current;
@@ -203,22 +317,14 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
     const visible = filteredRef.current.filter(c => c.latitude && c.longitude && inBounds(c));
 
     const nextShownIds = new Set<string>();
-    const nextClusterKeys = new Set<string>();
+    let nextClusterKeys = new Set<string>();
 
-    if (level >= REGION_CLUSTER_LEVEL) {
-      const groups = new Map<string, LogisticsCenter[]>();
-      visible.forEach(c => {
-        if (c.id === selectedIdRef.current) return; // 선택 건물은 아래서 항상 단독 처리
-        const key = regionKey(c);
-        const arr = groups.get(key);
-        if (arr) arr.push(c); else groups.set(key, [c]);
-      });
-      groups.forEach((members, key) => {
-        const lat = members.reduce((s, m) => s + m.latitude, 0) / members.length;
-        const lng = members.reduce((s, m) => s + m.longitude, 0) / members.length;
-        ensureCluster(key, key, lat, lng, members.length).ov.setMap(map);
-        nextClusterKeys.add(key);
-      });
+    if (level >= PROVINCE_LEVEL) {
+      nextClusterKeys = groupAndShowClusters(map, visible, provinceKey);
+    } else if (level >= REGION_LEVEL) {
+      nextClusterKeys = groupAndShowClusters(map, visible, regionKey);
+    } else if (level >= DISTRICT_LEVEL) {
+      nextClusterKeys = groupAndShowClusters(map, visible, districtKey);
     } else {
       visible.forEach(c => {
         if (c.id === selectedIdRef.current) return;
@@ -242,7 +348,12 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
       if (!nextShownIds.has(id) && overlays.current[id]) overlays.current[id].ov.setMap(null);
     });
     Object.keys(clusters.current).forEach(key => {
-      if (!nextClusterKeys.has(key)) clusters.current[key].ov.setMap(null);
+      if (!nextClusterKeys.has(key)) {
+        const c = clusters.current[key];
+        c.ov.setMap(null);
+        c.polys.forEach(p => p.setMap(null));
+        c.polys = [];
+      }
     });
     shownIds.current = nextShownIds;
   }

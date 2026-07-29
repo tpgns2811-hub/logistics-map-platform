@@ -96,9 +96,14 @@ function provinceKey(c: LogisticsCenter): string {
   return c.province || '기타';
 }
 
-// 시(이천시/여주시 등)가 있으면 시 단위로, 서울처럼 city===province인 경우엔 구 단위로 묶음
+const PROVINCES = ['서울특별시', '경기도', '인천광역시'];
+
+// 시(이천시/여주시 등)가 있으면 시 단위로, 서울·인천처럼 city===province인 경우엔 "도+구"로 묶음
+// (구 이름만 쓰면 서울 중구와 인천 중구처럼 동명이인이 있어 서로 다른 지역이 하나로 합쳐지는 버그가 생김)
 function regionKey(c: LogisticsCenter): string {
-  return c.city && c.city !== c.province ? c.city : (c.district || c.city || c.province || '기타');
+  if (c.city && c.city !== c.province) return c.city;
+  if (c.district) return `${c.province}${c.district}`;
+  return c.city || c.province || '기타';
 }
 
 // 중간 축척: 구/군 분리 가능한 시는 "시+구" 단위로, 그 외에는 regionKey와 동일(더 쪼갤 경계 데이터가 없음)
@@ -107,10 +112,13 @@ function districtKey(c: LogisticsCenter): string {
   return regionKey(c);
 }
 
-// 경계 lookup·그룹핑엔 붙여쓴 key를 쓰되, 배지에 보여줄 땐 "시 구"처럼 띄어서 표시
+// 경계 lookup·그룹핑엔 접두어 붙인 key를 쓰되, 배지에 보여줄 땐 접두어를 떼고 표시
 function regionLabel(key: string): string {
   for (const city of SPLIT_CITIES) {
     if (key.startsWith(city) && key.length > city.length) return `${city} ${key.slice(city.length)}`;
+  }
+  for (const prov of PROVINCES) {
+    if (key.startsWith(prov) && key.length > prov.length) return key.slice(prov.length);
   }
   return key;
 }
@@ -123,9 +131,12 @@ function loadBoundaries(): Promise<BoundaryFeature[]> {
   }
   return boundariesPromise;
 }
-// "용인시" -> 용인시 전체(구 3개 폴리곤 합), "용인시처인구" -> 그 구 하나만, 둘 다 startsWith로 커버됨
+// 정확히 일치하는 경계가 있으면 그것만(예: "서울특별시" 도 경계 자체, 구별로 쪼개진 걸 다 합치지 않음),
+// 없으면 접두어로 묶인 하위 구역을 전부 합침(예: "수원시" -> 수원시 소속 구 4개 폴리곤 합)
 function getBoundaryRings(list: BoundaryFeature[], key: string): number[][][] {
-  return list.filter(f => f.name === key || f.name.startsWith(key)).flatMap(f => f.rings);
+  const exact = list.filter(f => f.name === key);
+  if (exact.length) return exact.flatMap(f => f.rings);
+  return list.filter(f => f.name.startsWith(key)).flatMap(f => f.rings);
 }
 
 // 도넛 링 = 그 지역 건물들의 온도구성(상온/저온/복합) 비율 — 개별 핀·범례와 같은 TEMP_META 색상 사용

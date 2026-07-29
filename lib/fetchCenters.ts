@@ -38,7 +38,7 @@ function cleanHeader(cell: string): string {
 }
 
 /* ── Sheet1 파싱 → 기본 정보 ── */
-function parseSheet1(csv: string): Omit<LogisticsCenter, 'floors'>[] {
+function parseSheet1(csv: string): Omit<LogisticsCenter, 'floors' | 'floorSummary'>[] {
   const rows = parseCSV(csv);
   if (!rows.length) return [];
   const headers = rows[0].map(cleanHeader);

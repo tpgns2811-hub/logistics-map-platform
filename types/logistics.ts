@@ -31,7 +31,8 @@ export interface LogisticsCenter {
   rental_price_warm: number | null; // 상온 임대료 (원/임대평)
   rental_price_cold: number | null; // 저온 임대료 (원/임대평)
   rental_conditions: string;        // 임대 조건
-  floors: FloorInfo[];              // 층별 정보
+  floors?: FloorInfo[];             // 층별 상세 정보 (목록 응답엔 없음, 상세보기 시 별도 API로 조회)
+  floorSummary: { maxRentalArea: number; hasAvailable: boolean }; // 필터용 요약(목록 응답에 항상 포함)
   image: string;
   permit_date: string;              // 허가일
   construction_start_date: string;  // 착공일

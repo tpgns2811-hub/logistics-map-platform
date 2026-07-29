@@ -6,7 +6,7 @@ import Sidebar from './Sidebar';
 import KakaoMap from './KakaoMap';
 import DetailPanel from './DetailPanel';
 import Legend from './Legend';
-import type { LogisticsCenter, CenterStatus, TempType } from '@/types/logistics';
+import type { LogisticsCenter, CenterStatus, TempType, FloorInfo } from '@/types/logistics';
 import {
   TEMP_META, type Unit, type GfaRange,
   GFA_SLIDER_MAX, gfaToPyeong, hasFloorOver, hasAvailableFloor,
@@ -27,6 +27,8 @@ export default function MapLayout() {
   const [availableOnly, setAvailableOnly] = useState(false);
   const [unit,         setUnit]         = useState<Unit>('평');
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
+  const [selectedFloors, setSelectedFloors] = useState<FloorInfo[]>([]);
+  const [floorsLoading,  setFloorsLoading]  = useState(false);
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
   const [mapReady,     setMapReady]     = useState(false);
   const [isMobile,     setIsMobile]     = useState(false);
@@ -71,8 +73,8 @@ export default function MapLayout() {
     const matchStatus    = statusFilter === 'all' || c.status    === statusFilter;
     const p              = gfaToPyeong(c.gfa);
     const matchGfa       = p >= gfaRange[0] && p <= gfaRange[1];
-    const matchFloor     = floorMin === 0 || hasFloorOver(c.floors, floorMin);
-    const matchAvailable = !availableOnly || hasAvailableFloor(c.floors);
+    const matchFloor     = floorMin === 0 || hasFloorOver(c.floorSummary, floorMin);
+    const matchAvailable = !availableOnly || hasAvailableFloor(c.floorSummary);
     return matchSearch && matchTemp && matchStatus && matchGfa && matchFloor && matchAvailable;
   }), [centers, search, tempFilter, statusFilter, gfaRange, floorMin, availableOnly]);
 
@@ -80,6 +82,19 @@ export default function MapLayout() {
     () => centers.find(c => c.id === selectedId) ?? null,
     [centers, selectedId],
   );
+
+  // 상세 패널을 열 때만 그 건물의 층별 데이터를 따로 불러온다(목록 응답엔 안 실려있음)
+  useEffect(() => {
+    if (!selectedId) { setSelectedFloors([]); return; }
+    let cancelled = false;
+    setFloorsLoading(true);
+    fetch(`/api/centers/${encodeURIComponent(selectedId)}/floors`)
+      .then(res => res.ok ? res.json() : { floors: [] })
+      .then(({ floors }) => { if (!cancelled) setSelectedFloors(floors ?? []); })
+      .catch(() => { if (!cancelled) setSelectedFloors([]); })
+      .finally(() => { if (!cancelled) setFloorsLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedId]);
 
   const suggestions = useMemo(() => {
     if (search.length < 1) return [];
@@ -195,7 +210,13 @@ export default function MapLayout() {
             onReady={() => setMapReady(true)}
           />
           <Legend />
-          <DetailPanel center={selectedCenter} unit={unit} onClose={() => setSelectedId(null)} />
+          <DetailPanel
+            center={selectedCenter}
+            floors={selectedFloors}
+            floorsLoading={floorsLoading}
+            unit={unit}
+            onClose={() => setSelectedId(null)}
+          />
         </main>
       </div>
     </div>

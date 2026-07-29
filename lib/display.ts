@@ -50,19 +50,13 @@ export const FLOOR_OPTIONS: { value: number; label: string }[] = [
   { value: 10000, label: '층당 1만평↑' },
 ];
 
-/* ── 층별 필터 판정 (Floors 기반) ── */
+/* ── 층별 필터 판정 (floorSummary 기반 - 목록 응답에 항상 포함되는 요약값) ── */
 // 한 층이라도 임대면적 ≥ threshold(평)
-export function hasFloorOver(floors: { rental_area: string }[], threshold: number): boolean {
+export function hasFloorOver(summary: { maxRentalArea: number }, threshold: number): boolean {
   if (!threshold) return true;
-  return floors.some(f => {
-    const a = parseFloat(String(f.rental_area).replace(/,/g, ''));
-    return isFinite(a) && a >= threshold;
-  });
+  return summary.maxRentalArea >= threshold;
 }
 // 한 층이라도 입주상담 가능(임대완료/공란이 아닌 값)
-export function hasAvailableFloor(floors: { available: string }[]): boolean {
-  return floors.some(f => {
-    const v = (f.available ?? '').trim();
-    return v !== '' && v !== '-' && v !== '임대완료';
-  });
+export function hasAvailableFloor(summary: { hasAvailable: boolean }): boolean {
+  return summary.hasAvailable;
 }

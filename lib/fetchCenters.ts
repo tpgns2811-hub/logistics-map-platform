@@ -96,7 +96,7 @@ function parseSheet2(csv: string): Record<string, FloorInfo[]> {
   if (hIdx < 0) hIdx = 0;
   const headers = rows[hIdx].map(cleanHeader);
 
-  const idPattern = /^(s1_|pe_|lc[-_])/;
+  const idPattern = /^(s1_|pe_|lc[-_]|ap_)/;
   rows.slice(hIdx + 1).forEach(r => {
     const id = (r[0] ?? '').trim();
     if (!idPattern.test(id)) return; // 설명행/빈행 스킵
@@ -113,6 +113,19 @@ function parseSheet2(csv: string): Record<string, FloorInfo[]> {
     });
   });
   return result;
+}
+
+/* ── 필터용 요약값 계산 (전체 층 목록을 클라이언트에 보내지 않고도 필터링 가능하게) ── */
+function summarizeFloors(floors: FloorInfo[]): LogisticsCenter['floorSummary'] {
+  let maxRentalArea = 0;
+  let hasAvailable = false;
+  for (const f of floors) {
+    const a = parseFloat(String(f.rental_area).replace(/,/g, ''));
+    if (isFinite(a) && a > maxRentalArea) maxRentalArea = a;
+    const v = (f.available ?? '').trim();
+    if (v !== '' && v !== '-' && v !== '임대완료') hasAvailable = true;
+  }
+  return { maxRentalArea, hasAvailable };
 }
 
 /* ── 로컬 JSON fallback 에서 province/city/district 분리 ── */
@@ -144,6 +157,7 @@ export async function fetchCenters(force = false): Promise<LogisticsCenter[]> {
         (localFloorsData as Record<string, FloorInfo[]>)[c.id] ?? [];
       return {
         ...c, province, city, district, floors,
+        floorSummary: summarizeFloors(floors),
         permit_date: c.permit_date ?? '',
         construction_start_date: c.construction_start_date ?? '',
         remarks: c.remarks ?? '',
@@ -163,10 +177,10 @@ export async function fetchCenters(force = false): Promise<LogisticsCenter[]> {
     const centers   = parseSheet1(csv1);
     const floorsMap = csv2 ? parseSheet2(csv2) : (localFloorsData as Record<string, FloorInfo[]>);
 
-    return centers.map(c => ({
-      ...c,
-      floors: floorsMap[c.id] ?? [],
-    }));
+    return centers.map(c => {
+      const floors = floorsMap[c.id] ?? [];
+      return { ...c, floors, floorSummary: summarizeFloors(floors) };
+    });
 
   } catch (err) {
     console.error('[fetchCenters] Sheets 연결 실패 → 로컬 JSON 사용:', err);

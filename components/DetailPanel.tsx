@@ -1,8 +1,10 @@
-import type { LogisticsCenter } from '@/types/logistics';
+import type { LogisticsCenter, FloorInfo } from '@/types/logistics';
 import { TEMP_META, STATUS_COLOR, fmtSqm, fmtPyeong, type Unit } from '@/lib/display';
 
 interface Props {
   center: LogisticsCenter | null;
+  floors: FloorInfo[];
+  floorsLoading: boolean;
   unit: Unit;
   onClose: () => void;
 }
@@ -16,7 +18,7 @@ const val = (v: string | number | null, unit = '') => (
   </div>
 );
 
-export default function DetailPanel({ center, unit, onClose }: Props) {
+export default function DetailPanel({ center, floors, floorsLoading, unit, onClose }: Props) {
   const dot = center ? (STATUS_COLOR[center.status] ?? '#94a3b8') : '#94a3b8';
   const tm  = center ? (TEMP_META[center.temp_type] ?? TEMP_META['상온']) : TEMP_META['상온'];
 
@@ -113,7 +115,11 @@ export default function DetailPanel({ center, unit, onClose }: Props) {
 
         {/* 층별 현황 */}
         <Section title="층별 현황">
-          {center.floors.length === 0 ? (
+          {floorsLoading ? (
+            <div style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', padding: '16px 0' }}>
+              불러오는 중...
+            </div>
+          ) : floors.length === 0 ? (
             <div style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', padding: '16px 0' }}>
               데이터 준비 중
             </div>
@@ -130,7 +136,7 @@ export default function DetailPanel({ center, unit, onClose }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {center.floors.map((f, i) => {
+                  {floors.map((f, i) => {
                     const avBg   = f.available === '임대완료' ? '#fee2e2' : f.available === '즉시' ? '#dcfce7' : '#f5f7fa';
                     const avText = f.available === '임대완료' ? '#ef4444' : f.available === '즉시' ? '#16a34a' : '#64748b';
                     return (

@@ -69,10 +69,32 @@ type OverlayData = {
   ov: any; el: HTMLDivElement; pin: HTMLDivElement; popup: HTMLDivElement; center: LogisticsCenter;
 };
 
+type ClusterData = { ov: any; el: HTMLDivElement; count: number; name: string };
+
+const REGION_CLUSTER_LEVEL = 7; // 지도 레벨이 이 값 이상(축소)이면 시/군/구 단위로 묶어서 개수만 표시, 미만이면 개별 핀
+
+// 시(이천시/여주시 등)가 있으면 시 단위로, 서울처럼 city===province인 경우엔 구 단위로 묶음
+function regionKey(c: LogisticsCenter): string {
+  return c.city && c.city !== c.province ? c.city : (c.district || c.city || c.province || '기타');
+}
+
+function clusterPinHTML(name: string, count: number): string {
+  return `
+    <div style="display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:20px;
+      background:#0B2545;border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.35);
+      cursor:pointer;white-space:nowrap;">
+      <span style="font-size:12px;font-weight:700;color:#fff;">${name}</span>
+      <span style="font-size:11px;font-weight:700;color:#0B2545;background:#fff;
+        border-radius:10px;padding:1px 7px;min-width:18px;text-align:center;">${count}</span>
+    </div>`;
+}
+
 export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId, onSelect, onReady }: Props) {
   const mapRef        = useRef<HTMLDivElement>(null);
   const mapInst       = useRef<any>(null);
   const overlays      = useRef<Record<string, OverlayData>>({});
+  const clusters      = useRef<Record<string, ClusterData>>({});
+  const shownIds      = useRef<Set<string>>(new Set());
   const inited        = useRef(false);
   const selectedIdRef = useRef<string | null>(selectedId);
   const unitRef       = useRef<Unit>(unit);
@@ -142,23 +164,87 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
     return data;
   }
 
-  /* ── 화면 안 마커만 표시 (뷰포트 컬링) ── */
+  /* ── 클러스터 오버레이 lazy 생성/재사용 ── */
+  function ensureCluster(key: string, name: string, lat: number, lng: number, count: number): ClusterData {
+    const existing = clusters.current[key];
+    if (existing) {
+      if (existing.count !== count) { existing.count = count; existing.el.innerHTML = clusterPinHTML(name, count); }
+      existing.ov.setPosition(new window.kakao.maps.LatLng(lat, lng));
+      return existing;
+    }
+    const el = document.createElement('div');
+    el.innerHTML = clusterPinHTML(name, count);
+    el.addEventListener('click', (e: MouseEvent) => {
+      e.stopPropagation();
+      const map = mapInst.current;
+      if (!map) return;
+      map.setLevel(REGION_CLUSTER_LEVEL - 2, { anchor: new window.kakao.maps.LatLng(lat, lng) });
+    });
+    const ov = new window.kakao.maps.CustomOverlay({
+      position: new window.kakao.maps.LatLng(lat, lng), content: el, yAnchor: 0.5, zIndex: 5,
+    });
+    const data: ClusterData = { ov, el, count, name };
+    clusters.current[key] = data;
+    return data;
+  }
+
+  /* ── 화면 안 마커만 표시 + 시/군/구 단위 클러스터링 (뷰포트 컬링) ──
+     축소 상태에서 수백 개 핀이 동시에 DOM 오버레이로 뜨는 게 렉의 주 원인이라
+     레벨이 REGION_CLUSTER_LEVEL 이상이면 행정구역(시/군/구)별로 묶어서 "지역명 개수" 배지 하나로 표시,
+     그보다 확대하면 건물별 개별 핀으로 전환 */
   function refreshMarkers() {
     const map = mapInst.current;
     if (!map || !window.kakao) return;
     const bounds = map.getBounds();
+    const level = map.getLevel();
     const inBounds = (c: LogisticsCenter) =>
       bounds.contain(new window.kakao.maps.LatLng(c.latitude, c.longitude));
 
-    const filteredIds = new Set<string>();
-    filteredRef.current.forEach(c => {
-      filteredIds.add(c.id);
-      if (inBounds(c)) ensureOverlay(c).ov.setMap(map);
+    const visible = filteredRef.current.filter(c => c.latitude && c.longitude && inBounds(c));
+
+    const nextShownIds = new Set<string>();
+    const nextClusterKeys = new Set<string>();
+
+    if (level >= REGION_CLUSTER_LEVEL) {
+      const groups = new Map<string, LogisticsCenter[]>();
+      visible.forEach(c => {
+        if (c.id === selectedIdRef.current) return; // 선택 건물은 아래서 항상 단독 처리
+        const key = regionKey(c);
+        const arr = groups.get(key);
+        if (arr) arr.push(c); else groups.set(key, [c]);
+      });
+      groups.forEach((members, key) => {
+        const lat = members.reduce((s, m) => s + m.latitude, 0) / members.length;
+        const lng = members.reduce((s, m) => s + m.longitude, 0) / members.length;
+        ensureCluster(key, key, lat, lng, members.length).ov.setMap(map);
+        nextClusterKeys.add(key);
+      });
+    } else {
+      visible.forEach(c => {
+        if (c.id === selectedIdRef.current) return;
+        ensureOverlay(c).ov.setMap(map);
+        nextShownIds.add(c.id);
+      });
+    }
+
+    // 선택된 건물은 줌레벨/필터/화면범위와 무관하게 항상 단독 핀으로 유지
+    const selId = selectedIdRef.current;
+    if (selId && !nextShownIds.has(selId)) {
+      const c = centerByIdRef.current[selId];
+      if (c && c.latitude && c.longitude) {
+        ensureOverlay(c).ov.setMap(map);
+        nextShownIds.add(selId);
+      }
+    }
+
+    // 직전에 보이던 것 중 이번에 안 보이는 것만 정리(전체 오버레이 순회 안 함 — 세션이 길어져도 비용 고정)
+    shownIds.current.forEach(id => {
+      if (!nextShownIds.has(id) && overlays.current[id]) overlays.current[id].ov.setMap(null);
     });
-    Object.entries(overlays.current).forEach(([id, o]) => {
-      if (id === selectedIdRef.current) { o.ov.setMap(map); return; }
-      o.ov.setMap(filteredIds.has(id) && inBounds(o.center) ? map : null);
+    Object.keys(clusters.current).forEach(key => {
+      if (!nextClusterKeys.has(key)) clusters.current[key].ov.setMap(null);
     });
+    shownIds.current = nextShownIds;
   }
 
   /* ── 페이지 줌 방지 ── */

@@ -1,5 +1,6 @@
 import type { LogisticsCenter, FloorInfo } from '@/types/logistics';
 import { TEMP_META, STATUS_COLOR, fmtSqm, fmtPyeong, type Unit } from '@/lib/display';
+import MemoSection from './MemoSection';
 
 interface Props {
   center: LogisticsCenter | null;
@@ -137,6 +138,11 @@ export default function DetailPanel({ center, floors, floorsLoading, unit, onClo
             </div>
           </Section>
         )}
+
+        {/* 내 메모 */}
+        <Section title="내 메모">
+          <MemoSection centerId={center.id} />
+        </Section>
 
         {/* 층별 현황 */}
         <Section title="층별 현황">

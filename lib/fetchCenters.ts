@@ -1,5 +1,6 @@
 import type { LogisticsCenter, FloorInfo, NearbyIC } from '@/types/logistics';
 import localFloorsData from '@/data/floors.json';
+import { sql, dbEnabled } from '@/lib/db';
 
 const SHEET1_URL = process.env.GOOGLE_SHEET_CSV_URL    ?? ''; // 기본 정보
 const SHEET2_URL = process.env.GOOGLE_SHEET_FLOORS_URL ?? ''; // 층별 현황
@@ -154,6 +155,36 @@ function splitAddress(full: string) {
    "새로고침" 버튼(force=true)만 캐시를 건너뛰고 즉시 최신본을 가져온다. */
 const REVALIDATE_SECONDS = 120;
 
+/* ── 운영자가 만든 수정/추가/숨김을 Sheet 원본 위에 적용 ── */
+async function applyOverrides<T extends { id: string }>(centers: T[]): Promise<T[]> {
+  if (!dbEnabled) return centers;
+  try {
+    const rows = await sql!`SELECT center_id, action, data FROM center_overrides` as
+      { center_id: string; action: string; data: Partial<T> | null }[];
+    if (!rows.length) return centers;
+
+    const byId = new Map(rows.map(r => [r.center_id, r]));
+    const seen = new Set<string>();
+    const result: T[] = [];
+    for (const c of centers) {
+      seen.add(c.id);
+      const ov = byId.get(c.id);
+      if (!ov) { result.push(c); continue; }
+      if (ov.action === 'delete') continue;
+      result.push({ ...c, ...(ov.data ?? {}) });
+    }
+    for (const [id, ov] of byId) {
+      if (!seen.has(id) && ov.action === 'create' && ov.data) {
+        result.push({ id, ...ov.data } as T);
+      }
+    }
+    return result;
+  } catch (err) {
+    console.error('[fetchCenters] 오버레이 적용 실패, 원본 그대로 사용:', err);
+    return centers;
+  }
+}
+
 /* ── 메인 함수 ── */
 export async function fetchCenters(force = false): Promise<LogisticsCenter[]> {
   const useSheets = !!SHEET1_URL;
@@ -187,7 +218,7 @@ export async function fetchCenters(force = false): Promise<LogisticsCenter[]> {
         : Promise.resolve(''),
     ]);
 
-    const centers   = parseSheet1(csv1);
+    const centers   = await applyOverrides(parseSheet1(csv1));
     const floorsMap = csv2 ? parseSheet2(csv2) : (localFloorsData as Record<string, FloorInfo[]>);
 
     return centers.map(c => {

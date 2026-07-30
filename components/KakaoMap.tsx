@@ -74,10 +74,11 @@ type ClusterData = { ov: any; el: HTMLDivElement; count: number; temp: TempCount
 type BoundaryFeature = { name: string; rings: number[][][] };
 
 // 지도 레벨(클수록 축소): 카카오 척도상 "시/도" 스케일인 PROVINCE_LEVEL 이상은 물류 권역
-// (동남권/남부권/중앙권/서부권/서북권/북부권/서울) 단위 배지, 거기서 한 번 확대한 REGION_LEVEL(정확히 한 단계)은
-// 시/군/구 단위 배지, 그보다 더 확대하면 바로 개별 핀으로 전환(중간 구/읍면 단계 없음)
+// (동남권/남부권/중앙권/서부권/서북권/북부권/서울) 단위 배지, REGION_LEVEL~PROVINCE_LEVEL-1(시/군 척도에서
+// 한 단계 더 확대한 것까지 포함 - 렉 방지를 위해 배지 유지 구간을 넓게 둠)은 시/군/구 단위 배지,
+// 그보다 더 확대하면 바로 개별 핀으로 전환(중간 구/읍면 단계 없음)
 const PROVINCE_LEVEL = 10;
-const REGION_LEVEL = 9;
+const REGION_LEVEL = 8;
 
 // 한 단계 확대: 권역 -> 시/군/구 -> 개별 건물 순으로 정확히 다음 단계까지만 줌인
 function stepDownLevel(level: number): number {

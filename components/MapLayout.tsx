@@ -69,18 +69,25 @@ export default function MapLayout() {
     return () => clearInterval(timer);
   }, [loadData]);
 
+  // 준공연도/건축허가연도 필터를 실제로 좁힌 상태면, 아직 준공일·허가일이 확정되지 않은
+  // 미착공·공사중 건물은 결과 자체에서 제외한다(연도 필터의 의미상 완료되지 않은 건들을 섞어 보여줄 수 없음)
+  const yearFilterActive =
+    completionYearRange[0] !== YEAR_MIN || completionYearRange[1] !== YEAR_MAX ||
+    permitYearRange[0]     !== YEAR_MIN || permitYearRange[1]     !== YEAR_MAX;
+
   const filtered = useMemo(() => centers.filter(c => {
     const matchSearch    = search === '' || c.name.includes(search) || c.address.includes(search);
     const matchTemp      = tempFilter   === 'all' || c.temp_type === tempFilter;
     const matchStatus    = statusFilter === 'all' || c.status    === statusFilter;
     const p              = gfaToPyeong(c.gfa);
     const matchGfa       = p >= gfaRange[0] && p <= gfaRange[1];
+    const matchYearStatus = !yearFilterActive || (c.status !== '미착공' && c.status !== '공사중');
     const matchCompletion = inYearRange(c.completion_date, completionYearRange);
     const matchPermit     = inYearRange(c.permit_date, permitYearRange);
     const matchFloor     = floorMin === 0 || hasFloorOver(c.floorSummary, floorMin);
     const matchAvailable = !availableOnly || hasAvailableFloor(c.floorSummary);
-    return matchSearch && matchTemp && matchStatus && matchGfa && matchCompletion && matchPermit && matchFloor && matchAvailable;
-  }), [centers, search, tempFilter, statusFilter, gfaRange, completionYearRange, permitYearRange, floorMin, availableOnly]);
+    return matchSearch && matchTemp && matchStatus && matchGfa && matchYearStatus && matchCompletion && matchPermit && matchFloor && matchAvailable;
+  }), [centers, search, tempFilter, statusFilter, gfaRange, yearFilterActive, completionYearRange, permitYearRange, floorMin, availableOnly]);
 
   const selectedCenter = useMemo(
     () => centers.find(c => c.id === selectedId) ?? null,

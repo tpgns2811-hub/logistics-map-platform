@@ -12,9 +12,16 @@ interface Props {
 const lbl = (t: string) => (
   <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>{t}</div>
 );
+// 구조적으로 없어도 정상인 값(미착공 건물의 착공일, 상온센터의 저온임대료 등) - '-' 표시
 const val = (v: string | number | null, unit = '') => (
   <div style={{ fontSize: '13px', color: '#0B2545', fontWeight: 500 }}>
     {v != null && v !== '' ? `${typeof v === 'number' ? v.toLocaleString() : v}${unit}` : '-'}
+  </div>
+);
+// 원래 값이 있어야 정상인데 데이터를 못 채운 경우 - '확인중'으로 구분 표시(주차 0대 등 있을 수 없는 값 포함)
+const valPending = (v: string | number | null, unit = '') => (
+  <div style={{ fontSize: '13px', color: v ? '#0B2545' : '#94a3b8', fontWeight: 500, fontStyle: v ? 'normal' : 'italic' }}>
+    {v != null && v !== '' ? `${typeof v === 'number' ? v.toLocaleString() : v}${unit}` : '확인중'}
   </div>
 );
 
@@ -77,14 +84,14 @@ export default function DetailPanel({ center, floors, floorsLoading, unit, onClo
         {/* 기본 정보 */}
         <Section title="기본 정보">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <div>{lbl('대지면적')}{val(center.land_area ? `${fmtSqm(center.land_area, unit)} ${unit}` : null)}</div>
-            <div>{lbl('연면적')}{val(center.gfa ? `${fmtSqm(center.gfa, unit)} ${unit}` : null)}</div>
-            <div>{lbl('규모')}{val(center.scale)}</div>
-            <div>{lbl('주차')}{val(center.parking, '대')}</div>
-            <div>{lbl('허가일')}{val(center.permit_date)}</div>
-            <div>{lbl('착공일')}{val(center.construction_start_date)}</div>
-            <div>{lbl('준공일')}{val(center.completion_date)}</div>
-            <div>{lbl('개발사')}{val(center.developer)}</div>
+            <div>{lbl('대지면적')}{valPending(center.land_area ? `${fmtSqm(center.land_area, unit)} ${unit}` : null)}</div>
+            <div>{lbl('연면적')}{valPending(center.gfa ? `${fmtSqm(center.gfa, unit)} ${unit}` : null)}</div>
+            <div>{lbl('규모')}{valPending(center.scale)}</div>
+            <div>{lbl('주차')}{valPending(center.parking ? `${center.parking}대` : null)}</div>
+            <div>{lbl('허가일')}{valPending(center.permit_date)}</div>
+            <div>{lbl('착공일')}{center.status === '미착공' ? val(null) : valPending(center.construction_start_date)}</div>
+            <div>{lbl('준공일')}{center.status !== '운영중' ? val(null) : valPending(center.completion_date)}</div>
+            <div>{lbl('개발사')}{valPending(center.developer)}</div>
           </div>
         </Section>
 
@@ -93,15 +100,19 @@ export default function DetailPanel({ center, floors, floorsLoading, unit, onClo
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '8px' }}>
             <div>
               {lbl('상온 임대료')}
-              {val(center.rental_price_warm ? `${center.rental_price_warm.toLocaleString()}원/평` : null)}
+              {center.temp_type === '저온'
+                ? val(null)
+                : valPending(center.rental_price_warm ? `${center.rental_price_warm.toLocaleString()}원/평` : null)}
             </div>
             <div>
               {lbl('저온 임대료')}
-              {val(center.rental_price_cold ? `${center.rental_price_cold.toLocaleString()}원/평` : null)}
+              {center.temp_type === '상온'
+                ? val(null)
+                : valPending(center.rental_price_cold ? `${center.rental_price_cold.toLocaleString()}원/평` : null)}
             </div>
           </div>
           {lbl('임대 조건')}
-          {val(center.rental_conditions)}
+          {(center.rental_price_warm || center.rental_price_cold) ? valPending(center.rental_conditions) : val(center.rental_conditions)}
         </Section>
 
         {/* 비고 */}

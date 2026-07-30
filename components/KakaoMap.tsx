@@ -19,8 +19,7 @@ interface Props {
 /* ── 지도 버전(맵타입) ── */
 const MAP_TYPES = [
   { key: 'ROADMAP', label: '기본'    },
-  { key: 'SKYVIEW', label: '스카이뷰' },
-  { key: 'HYBRID',  label: '하이브리드' },
+  { key: 'HYBRID',  label: '스카이뷰' },
 ] as const;
 type MapTypeKey = typeof MAP_TYPES[number]['key'];
 
@@ -74,20 +73,16 @@ type ClusterData = { ov: any; el: HTMLDivElement; count: number; temp: TempCount
 
 type BoundaryFeature = { name: string; rings: number[][][] };
 
-// 지도 레벨(클수록 축소): PROVINCE_LEVEL 이상 = 물류 권역(동남권/남부권/중앙권/서부권/서북권/북부권/서울) 단위,
-// REGION_LEVEL~PROVINCE_LEVEL-1 = 시/군/구 단위, DISTRICT_LEVEL~REGION_LEVEL-1 = 구/읍면 단위(분리 가능한 시만), 그 미만 = 개별 핀
+// 지도 레벨(클수록 축소): 카카오 척도상 "시/도" 스케일인 PROVINCE_LEVEL 이상은 물류 권역
+// (동남권/남부권/중앙권/서부권/서북권/북부권/서울) 단위 배지, 거기서 한 번 확대한 REGION_LEVEL(정확히 한 단계)은
+// 시/군/구 단위 배지, 그보다 더 확대하면 바로 개별 핀으로 전환(중간 구/읍면 단계 없음)
 const PROVINCE_LEVEL = 10;
-const REGION_LEVEL = 8;
-const DISTRICT_LEVEL = 6;
+const REGION_LEVEL = 9;
 
-// 구/군으로 나뉘어 있고 경계 데이터도 있는 시 — 이 시들만 중간 축척에서 한 단계 더 쪼갬
-const SPLIT_CITIES = new Set(['수원시', '성남시', '안양시', '안산시', '고양시', '용인시']);
-
-// 한 단계 확대: 도 -> 시/군/구 -> 구/읍면 -> 개별 건물 순으로 정확히 다음 단계까지만 줌인
+// 한 단계 확대: 권역 -> 시/군/구 -> 개별 건물 순으로 정확히 다음 단계까지만 줌인
 function stepDownLevel(level: number): number {
   if (level >= PROVINCE_LEVEL) return PROVINCE_LEVEL - 1;
   if (level >= REGION_LEVEL) return REGION_LEVEL - 1;
-  if (level >= DISTRICT_LEVEL) return DISTRICT_LEVEL - 1;
   return Math.max(1, level - 2);
 }
 
@@ -138,17 +133,8 @@ function regionKey(c: LogisticsCenter): string {
   return c.city || c.province || '기타';
 }
 
-// 중간 축척: 구/군 분리 가능한 시는 "시+구" 단위로, 그 외에는 regionKey와 동일(더 쪼갤 경계 데이터가 없음)
-function districtKey(c: LogisticsCenter): string {
-  if (c.city && c.city !== c.province && SPLIT_CITIES.has(c.city) && c.district) return `${c.city}${c.district}`;
-  return regionKey(c);
-}
-
 // 경계 lookup·그룹핑엔 접두어 붙인 key를 쓰되, 배지에 보여줄 땐 접두어를 떼고 표시
 function regionLabel(key: string): string {
-  for (const city of SPLIT_CITIES) {
-    if (key.startsWith(city) && key.length > city.length) return `${city} ${key.slice(city.length)}`;
-  }
   for (const prov of PROVINCES) {
     if (key.startsWith(prov) && key.length > prov.length) return key.slice(prov.length);
   }
@@ -357,11 +343,10 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
     return nextClusterKeys;
   }
 
-  /* ── 화면 안 마커만 표시 + 시/군/구(→구/읍면) 단계적 클러스터링 (뷰포트 컬링) ──
+  /* ── 화면 안 마커만 표시 + 2단계 클러스터링 (뷰포트 컬링) ──
      축소 상태에서 수백 개 핀이 동시에 DOM 오버레이로 뜨는 게 렉의 주 원인이라
-     PROVINCE_LEVEL 이상은 도(서울/경기도/인천) 단위, REGION_LEVEL~PROVINCE_LEVEL-1은 시/군/구 단위,
-     DISTRICT_LEVEL~REGION_LEVEL-1은 구/읍면 단위(분리 가능한 시만)로 묶어서 "지역명 개수" 배지로 표시하고,
-     그보다 확대하면 건물별 개별 핀으로 전환 */
+     PROVINCE_LEVEL(시/도 축척) 이상은 물류 권역 단위, 거기서 정확히 한 단계 확대한 REGION_LEVEL은
+     시/군/구 단위로 묶어서 "지역명 개수" 배지로 표시하고, 그보다 더 확대하면 바로 건물별 개별 핀으로 전환 */
   function refreshMarkers() {
     const map = mapInst.current;
     if (!map || !window.kakao) return;
@@ -379,8 +364,6 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
       nextClusterKeys = groupAndShowClusters(map, filteredRef.current, zoneKey, inBounds);
     } else if (level >= REGION_LEVEL) {
       nextClusterKeys = groupAndShowClusters(map, filteredRef.current, regionKey, inBounds);
-    } else if (level >= DISTRICT_LEVEL) {
-      nextClusterKeys = groupAndShowClusters(map, filteredRef.current, districtKey, inBounds);
     } else {
       visible.forEach(c => {
         if (c.id === selectedIdRef.current) return;

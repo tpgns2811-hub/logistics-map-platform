@@ -62,15 +62,6 @@ export default function Header({ onRefresh, lastUpdated, refreshing }: Props) {
             {refreshing ? '갱신 중...' : '새로고침'}
           </button>
         )}
-
-        {/* 네비 */}
-        <nav style={{ display: 'flex', gap: '20px' }}>
-          {['지도', '리스트', '리포트'].map(item => (
-            <a key={item} href="#" style={{ color: '#8DA9C4', fontSize: '13px', textDecoration: 'none' }}>
-              {item}
-            </a>
-          ))}
-        </nav>
       </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

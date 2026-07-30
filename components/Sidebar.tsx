@@ -5,7 +5,8 @@ import type { LogisticsCenter, CenterStatus, TempType } from '@/types/logistics'
 import {
   TEMP_META, STATUS_COLOR, fmtSqm,
   GFA_PRESETS, GFA_SLIDER_MAX, GFA_STEP, FLOOR_OPTIONS,
-  type GfaRange, type Unit,
+  YEAR_MIN, YEAR_MAX,
+  type GfaRange, type YearRange, type Unit,
 } from '@/lib/display';
 
 interface Props {
@@ -21,6 +22,10 @@ interface Props {
   onStatusFilter: (v: 'all' | CenterStatus) => void;
   gfaRange: GfaRange;
   onGfaRange: (v: GfaRange) => void;
+  completionYearRange: YearRange;
+  onCompletionYearRange: (v: YearRange) => void;
+  permitYearRange: YearRange;
+  onPermitYearRange: (v: YearRange) => void;
   floorMin: number;
   onFloorMin: (v: number) => void;
   availableOnly: boolean;
@@ -53,7 +58,9 @@ const gfaText = (p: number) =>
 export default function Sidebar({
   centers, total, search, onSearch,
   tempFilter, onTempFilter, statusFilter, onStatusFilter,
-  gfaRange, onGfaRange, floorMin, onFloorMin,
+  gfaRange, onGfaRange,
+  completionYearRange, onCompletionYearRange, permitYearRange, onPermitYearRange,
+  floorMin, onFloorMin,
   availableOnly, onAvailableOnly, unit,
   selectedId, onSelect,
 }: Props) {
@@ -83,11 +90,18 @@ export default function Sidebar({
     (tempFilter !== 'all' ? 1 : 0) +
     (statusFilter !== 'all' ? 1 : 0) +
     (gfaRange[0] !== 0 || gfaRange[1] !== GFA_SLIDER_MAX ? 1 : 0) +
+    (completionYearRange[0] !== YEAR_MIN || completionYearRange[1] !== YEAR_MAX ? 1 : 0) +
+    (permitYearRange[0] !== YEAR_MIN || permitYearRange[1] !== YEAR_MAX ? 1 : 0) +
     (floorMin !== 0 ? 1 : 0) +
     (availableOnly ? 1 : 0);
 
   const pctMin = (gfaRange[0] / GFA_SLIDER_MAX) * 100;
   const pctMax = (gfaRange[1] / GFA_SLIDER_MAX) * 100;
+  const compPctMin = ((completionYearRange[0] - YEAR_MIN) / (YEAR_MAX - YEAR_MIN)) * 100;
+  const compPctMax = ((completionYearRange[1] - YEAR_MIN) / (YEAR_MAX - YEAR_MIN)) * 100;
+  const permPctMin = ((permitYearRange[0] - YEAR_MIN) / (YEAR_MAX - YEAR_MIN)) * 100;
+  const permPctMax = ((permitYearRange[1] - YEAR_MIN) / (YEAR_MAX - YEAR_MIN)) * 100;
+  const yearText = (y: number) => (y <= YEAR_MIN ? `${YEAR_MIN}이전` : y >= YEAR_MAX ? `${YEAR_MAX}+` : `${y}`);
 
   return (
     <aside style={{
@@ -205,6 +219,46 @@ export default function Sidebar({
                 <input
                   className="gfa-dual" type="range" min={0} max={GFA_SLIDER_MAX} step={GFA_STEP} value={gfaRange[1]}
                   onChange={e => onGfaRange([gfaRange[0], Math.max(+e.target.value, gfaRange[0])])}
+                />
+              </div>
+            </div>
+
+            {/* 준공연도: 듀얼 슬라이더 */}
+            <div style={sectionLabel}>준공연도</div>
+            <div style={{ padding: '0 8px' }}>
+              <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '6px', textAlign: 'center' }}>
+                {yearText(completionYearRange[0])} ~ {yearText(completionYearRange[1])}
+              </div>
+              <div style={{ position: 'relative', height: '20px' }}>
+                <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: 0, right: 0, height: '4px', background: '#E5E9F0', borderRadius: '2px' }} />
+                <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', height: '4px', background: '#0B2545', borderRadius: '2px', left: `${compPctMin}%`, right: `${100 - compPctMax}%` }} />
+                <input
+                  className="gfa-dual" type="range" min={YEAR_MIN} max={YEAR_MAX} step={1} value={completionYearRange[0]}
+                  onChange={e => onCompletionYearRange([Math.min(+e.target.value, completionYearRange[1]), completionYearRange[1]])}
+                />
+                <input
+                  className="gfa-dual" type="range" min={YEAR_MIN} max={YEAR_MAX} step={1} value={completionYearRange[1]}
+                  onChange={e => onCompletionYearRange([completionYearRange[0], Math.max(+e.target.value, completionYearRange[0])])}
+                />
+              </div>
+            </div>
+
+            {/* 건축허가연도: 듀얼 슬라이더 */}
+            <div style={sectionLabel}>건축허가연도</div>
+            <div style={{ padding: '0 8px' }}>
+              <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '6px', textAlign: 'center' }}>
+                {yearText(permitYearRange[0])} ~ {yearText(permitYearRange[1])}
+              </div>
+              <div style={{ position: 'relative', height: '20px' }}>
+                <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: 0, right: 0, height: '4px', background: '#E5E9F0', borderRadius: '2px' }} />
+                <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', height: '4px', background: '#0B2545', borderRadius: '2px', left: `${permPctMin}%`, right: `${100 - permPctMax}%` }} />
+                <input
+                  className="gfa-dual" type="range" min={YEAR_MIN} max={YEAR_MAX} step={1} value={permitYearRange[0]}
+                  onChange={e => onPermitYearRange([Math.min(+e.target.value, permitYearRange[1]), permitYearRange[1]])}
+                />
+                <input
+                  className="gfa-dual" type="range" min={YEAR_MIN} max={YEAR_MAX} step={1} value={permitYearRange[1]}
+                  onChange={e => onPermitYearRange([permitYearRange[0], Math.max(+e.target.value, permitYearRange[0])])}
                 />
               </div>
             </div>

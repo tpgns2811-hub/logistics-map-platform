@@ -8,8 +8,8 @@ import DetailPanel from './DetailPanel';
 import Legend from './Legend';
 import type { LogisticsCenter, CenterStatus, TempType, FloorInfo } from '@/types/logistics';
 import {
-  TEMP_META, type Unit, type GfaRange,
-  GFA_SLIDER_MAX, gfaToPyeong, hasFloorOver, hasAvailableFloor,
+  TEMP_META, type Unit, type GfaRange, type YearRange,
+  GFA_SLIDER_MAX, YEAR_MIN, YEAR_MAX, gfaToPyeong, hasFloorOver, hasAvailableFloor, inYearRange,
 } from '@/lib/display';
 
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
@@ -23,6 +23,8 @@ export default function MapLayout() {
   const [tempFilter,   setTempFilter]   = useState<'all' | TempType>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | CenterStatus>('all');
   const [gfaRange,     setGfaRange]     = useState<GfaRange>([0, GFA_SLIDER_MAX]);
+  const [completionYearRange, setCompletionYearRange] = useState<YearRange>([YEAR_MIN, YEAR_MAX]);
+  const [permitYearRange,     setPermitYearRange]     = useState<YearRange>([YEAR_MIN, YEAR_MAX]);
   const [floorMin,     setFloorMin]     = useState(0);
   const [availableOnly, setAvailableOnly] = useState(false);
   const [unit,         setUnit]         = useState<Unit>('평');
@@ -73,10 +75,12 @@ export default function MapLayout() {
     const matchStatus    = statusFilter === 'all' || c.status    === statusFilter;
     const p              = gfaToPyeong(c.gfa);
     const matchGfa       = p >= gfaRange[0] && p <= gfaRange[1];
+    const matchCompletion = inYearRange(c.completion_date, completionYearRange);
+    const matchPermit     = inYearRange(c.permit_date, permitYearRange);
     const matchFloor     = floorMin === 0 || hasFloorOver(c.floorSummary, floorMin);
     const matchAvailable = !availableOnly || hasAvailableFloor(c.floorSummary);
-    return matchSearch && matchTemp && matchStatus && matchGfa && matchFloor && matchAvailable;
-  }), [centers, search, tempFilter, statusFilter, gfaRange, floorMin, availableOnly]);
+    return matchSearch && matchTemp && matchStatus && matchGfa && matchCompletion && matchPermit && matchFloor && matchAvailable;
+  }), [centers, search, tempFilter, statusFilter, gfaRange, completionYearRange, permitYearRange, floorMin, availableOnly]);
 
   const selectedCenter = useMemo(
     () => centers.find(c => c.id === selectedId) ?? null,
@@ -154,6 +158,8 @@ export default function MapLayout() {
             tempFilter={tempFilter} onTempFilter={setTempFilter}
             statusFilter={statusFilter} onStatusFilter={setStatusFilter}
             gfaRange={gfaRange} onGfaRange={setGfaRange}
+            completionYearRange={completionYearRange} onCompletionYearRange={setCompletionYearRange}
+            permitYearRange={permitYearRange} onPermitYearRange={setPermitYearRange}
             floorMin={floorMin} onFloorMin={setFloorMin}
             availableOnly={availableOnly} onAvailableOnly={setAvailableOnly}
             unit={unit}

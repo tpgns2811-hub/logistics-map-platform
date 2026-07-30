@@ -50,6 +50,26 @@ export const FLOOR_OPTIONS: { value: number; label: string }[] = [
   { value: 10000, label: '층당 1만평↑' },
 ];
 
+/* ── 준공연도 / 건축허가연도 필터 ── */
+export const YEAR_MIN = 1988;
+export const YEAR_MAX = 2027; // 데이터 최대연도(2026) + 1
+export type YearRange = [number, number];
+
+// "YYYY-MM-DD" / "YYYY" 문자열에서 연도만 추출, 없으면 null
+export function getYear(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  const y = parseInt(String(dateStr).slice(0, 4), 10);
+  return isFinite(y) && y > 1900 && y < 2100 ? y : null;
+}
+
+// 연도 범위 필터 판정 - 날짜 데이터가 아예 없는 건(미착공 등)은 걸러내지 않고 항상 통과시킴
+export function inYearRange(dateStr: string | null | undefined, range: YearRange): boolean {
+  if (range[0] === YEAR_MIN && range[1] === YEAR_MAX) return true; // 필터 미적용 상태
+  const y = getYear(dateStr);
+  if (y == null) return true;
+  return y >= range[0] && y <= range[1];
+}
+
 /* ── 층별 필터 판정 (floorSummary 기반 - 목록 응답에 항상 포함되는 요약값) ── */
 // 한 층이라도 임대면적 ≥ threshold(평)
 export function hasFloorOver(summary: { maxRentalArea: number }, threshold: number): boolean {

@@ -281,7 +281,7 @@ export default function Sidebar({
 
       {/* 결과 수 */}
       <div style={{ padding: '8px 12px', fontSize: '11px', color: '#94a3b8', borderBottom: '1px solid #E5E9F0' }}>
-        {centers.length}개 표시 중 (전체 {total}개)
+        {centers.length}개 표시 중
       </div>
 
       {/* 리스트 (가상화) */}

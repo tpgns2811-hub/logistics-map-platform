@@ -74,7 +74,7 @@ type ClusterData = { ov: any; el: HTMLDivElement; count: number; temp: TempCount
 
 type BoundaryFeature = { name: string; rings: number[][][] };
 
-// 지도 레벨(클수록 축소): PROVINCE_LEVEL 이상 = 도(서울/경기도/인천) 단위,
+// 지도 레벨(클수록 축소): PROVINCE_LEVEL 이상 = 물류 권역(동남권/남부권/중앙권/서부권/서북권/북부권/서울) 단위,
 // REGION_LEVEL~PROVINCE_LEVEL-1 = 시/군/구 단위, DISTRICT_LEVEL~REGION_LEVEL-1 = 구/읍면 단위(분리 가능한 시만), 그 미만 = 개별 핀
 const PROVINCE_LEVEL = 10;
 const REGION_LEVEL = 8;
@@ -91,10 +91,45 @@ function stepDownLevel(level: number): number {
   return Math.max(1, level - 2);
 }
 
-// 도(서울특별시/경기도/인천광역시) 단위
-function provinceKey(c: LogisticsCenter): string {
-  return c.province || '기타';
+// 가장 넓은 축척(도 단위)에서는 행정구역(서울/경기/인천)이 아니라 물류 권역 기준 6권역으로 묶음
+const ZONE_BY_CITY: Record<string, string> = {
+  '광주시': '동남권', '이천시': '동남권', '여주시': '동남권',
+  '안성시': '남부권', '평택시': '남부권',
+  '군포시': '중앙권', '의왕시': '중앙권', '안양시': '중앙권', '과천시': '중앙권',
+  '수원시': '중앙권', '오산시': '중앙권', '성남시': '중앙권',
+  '안산시': '서부권', '시흥시': '서부권', '광명시': '서부권',
+  '고양시': '서북권', '파주시': '서북권', '김포시': '서북권', '부천시': '서북권',
+  '가평군': '북부권', '남양주시': '북부권', '동두천시': '북부권', '양주시': '북부권',
+  '의정부시': '북부권', '포천시': '북부권', '하남시': '북부권',
+};
+// 화성시는 동탄 지역(법정동 기준)만 중앙권, 나머지는 남부권으로 쪼갬
+const DONGTAN_DONGS = new Set(['방교동', '안녕동', '장지동', '만세구']);
+// 인천은 구/군 단위로 서부권·서북권에 나눠 소속
+const INCHEON_ZONE: Record<string, string> = {
+  '중구': '서부권', '동구': '서부권', '미추홀구': '서부권', '서구': '서부권',
+  '남동구': '서부권', '연수구': '서부권', '옹진군': '서부권',
+  '계양구': '서북권', '부평구': '서북권', '강화군': '서북권',
+};
+
+function zoneKey(c: LogisticsCenter): string {
+  if (c.province === '서울특별시') return '서울';
+  if (c.province === '인천광역시') return INCHEON_ZONE[c.district] ?? '기타';
+  if (c.city === '용인시') return c.district === '처인구' ? '동남권' : '중앙권'; // 수지구/기흥구 -> 중앙권
+  if (c.city === '화성시') return DONGTAN_DONGS.has(c.district) ? '중앙권' : '남부권';
+  return ZONE_BY_CITY[c.city] ?? '기타';
 }
+
+// 권역 호버 강조는 실제 경계 데이터가 없으니(권역=행정구역 아님) 소속 시/군/구 경계를 합쳐서 그림
+const ZONE_BOUNDARY_KEYS: Record<string, string[]> = {
+  '동남권': ['광주시', '이천시', '여주시', '용인시처인구'],
+  '남부권': ['안성시', '평택시'],
+  '중앙권': ['군포시', '의왕시', '안양시', '과천시', '수원시', '오산시', '성남시', '용인시기흥구', '용인시수지구'],
+  '서부권': ['안산시', '시흥시', '광명시', '인천광역시중구', '인천광역시동구', '인천광역시미추홀구',
+             '인천광역시서구', '인천광역시남동구', '인천광역시연수구', '인천광역시옹진군'],
+  '서북권': ['고양시', '파주시', '김포시', '부천시', '인천광역시계양구', '인천광역시부평구', '인천광역시강화군'],
+  '북부권': ['가평군', '남양주시', '동두천시', '양주시', '의정부시', '포천시', '하남시'],
+  '서울': ['서울특별시'],
+};
 
 const PROVINCES = ['서울특별시', '경기도', '인천광역시'];
 
@@ -137,6 +172,13 @@ function getBoundaryRings(list: BoundaryFeature[], key: string): number[][][] {
   const exact = list.filter(f => f.name === key);
   if (exact.length) return exact.flatMap(f => f.rings);
   return list.filter(f => f.name.startsWith(key)).flatMap(f => f.rings);
+}
+
+// 권역(동남권 등)은 행정구역이 아니라 여러 시/군/구를 합친 것이므로 소속 목록을 각각 조회해 합침
+function resolveBoundaryRings(list: BoundaryFeature[], key: string): number[][][] {
+  const zoneKeys = ZONE_BOUNDARY_KEYS[key];
+  if (zoneKeys) return zoneKeys.flatMap(k => getBoundaryRings(list, k));
+  return getBoundaryRings(list, key);
 }
 
 // 도넛 링 = 그 지역 건물들의 온도구성(상온/저온/복합) 비율 — 개별 핀·범례와 같은 TEMP_META 색상 사용
@@ -261,7 +303,7 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
       el.style.transition = 'transform .15s ease';
       loadBoundaries().then(list => {
         data.polys.forEach(p => p.setMap(null));
-        data.polys = getBoundaryRings(list, key).map(ring => {
+        data.polys = resolveBoundaryRings(list, key).map(ring => {
           const poly = new window.kakao.maps.Polygon({
             path: ring.map(([lat2, lng2]) => new window.kakao.maps.LatLng(lat2, lng2)),
             strokeWeight: 3, strokeColor: '#0B2545', strokeOpacity: 0.85,
@@ -292,21 +334,27 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
     return data;
   }
 
-  function groupAndShowClusters(map: any, visible: LogisticsCenter[], keyFn: (c: LogisticsCenter) => string) {
-    const groups = new Map<string, LogisticsCenter[]>();
-    visible.forEach(c => {
+  // 배지 숫자는 "지금 화면에 보이는 핀 개수"가 아니라 "그 지역에 데이터상 존재하는 전체 개수"여야 하므로,
+  // 카운트/온도구성은 뷰포트로 자르기 전의 전체 filtered 목록(all)에서 계산한다.
+  // 다만 배지 "위치"는 화면 안에 있는 멤버들만으로 평균을 내야 함 — 북부권처럼 하남시~포천시까지
+  // 넓게 퍼진 지역은 전체 평균 좌표가 화면 밖으로 나가버려 배지 자체가 아예 안 뜨는 문제가 있었음.
+  function groupAndShowClusters(
+    map: any, all: LogisticsCenter[], keyFn: (c: LogisticsCenter) => string, inBounds: (c: LogisticsCenter) => boolean,
+  ) {
+    const groups = new Map<string, { temp: TempCounts; visSumLat: number; visSumLng: number; visN: number }>();
+    all.forEach(c => {
       if (c.id === selectedIdRef.current) return; // 선택 건물은 아래서 항상 단독 처리
+      if (!c.latitude || !c.longitude) return;
       const key = keyFn(c);
-      const arr = groups.get(key);
-      if (arr) arr.push(c); else groups.set(key, [c]);
+      let g = groups.get(key);
+      if (!g) { g = { temp: { 상온: 0, 저온: 0, 복합: 0 }, visSumLat: 0, visSumLng: 0, visN: 0 }; groups.set(key, g); }
+      g.temp[c.temp_type] = (g.temp[c.temp_type] ?? 0) + 1; // 전체 개수는 화면 범위와 무관하게 항상 누적
+      if (inBounds(c)) { g.visSumLat += c.latitude; g.visSumLng += c.longitude; g.visN++; }
     });
     const nextClusterKeys = new Set<string>();
-    groups.forEach((members, key) => {
-      const lat = members.reduce((s, m) => s + m.latitude, 0) / members.length;
-      const lng = members.reduce((s, m) => s + m.longitude, 0) / members.length;
-      const temp: TempCounts = { 상온: 0, 저온: 0, 복합: 0 };
-      members.forEach(m => { temp[m.temp_type] = (temp[m.temp_type] ?? 0) + 1; });
-      ensureCluster(key, lat, lng, temp).ov.setMap(map);
+    groups.forEach((g, key) => {
+      if (g.visN === 0) return; // 화면 안에 걸치는 멤버가 하나도 없으면 배지 자체를 안 띄움
+      ensureCluster(key, g.visSumLat / g.visN, g.visSumLng / g.visN, g.temp).ov.setMap(map);
       nextClusterKeys.add(key);
     });
     return nextClusterKeys;
@@ -331,11 +379,11 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
     let nextClusterKeys = new Set<string>();
 
     if (level >= PROVINCE_LEVEL) {
-      nextClusterKeys = groupAndShowClusters(map, visible, provinceKey);
+      nextClusterKeys = groupAndShowClusters(map, filteredRef.current, zoneKey, inBounds);
     } else if (level >= REGION_LEVEL) {
-      nextClusterKeys = groupAndShowClusters(map, visible, regionKey);
+      nextClusterKeys = groupAndShowClusters(map, filteredRef.current, regionKey, inBounds);
     } else if (level >= DISTRICT_LEVEL) {
-      nextClusterKeys = groupAndShowClusters(map, visible, districtKey);
+      nextClusterKeys = groupAndShowClusters(map, filteredRef.current, districtKey, inBounds);
     } else {
       visible.forEach(c => {
         if (c.id === selectedIdRef.current) return;
@@ -399,6 +447,11 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
         });
         mapInst.current = map;
         map.addControl(new window.kakao.maps.ZoomControl(), window.kakao.maps.ControlPosition.RIGHT);
+
+        // 컨테이너가 아직 레이아웃 확정 전에 지도가 생성되면 getBounds()가 0-size로 잡혀
+        // 첫 idle에서 뷰포트 안 마커가 하나도 없다고 판단해버리는 경우가 있어 relayout으로 사이즈를 재보정
+        map.relayout();
+        map.setCenter(new window.kakao.maps.LatLng(37.3595, 127.1052));
 
         filteredRef.current = centers;
         window.kakao.maps.event.addListener(map, 'idle', refreshMarkers);

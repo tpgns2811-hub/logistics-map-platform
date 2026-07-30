@@ -1,4 +1,4 @@
-import type { LogisticsCenter, FloorInfo } from '@/types/logistics';
+import type { LogisticsCenter, FloorInfo, NearbyIC } from '@/types/logistics';
 import localFloorsData from '@/data/floors.json';
 
 const SHEET1_URL = process.env.GOOGLE_SHEET_CSV_URL    ?? ''; // 기본 정보
@@ -35,6 +35,17 @@ function parseCSV(text: string): string[][] {
 /* 헤더 셀에서 \n(설명) 부분을 떼고 실제 컬럼명만 추출 */
 function cleanHeader(cell: string): string {
   return (cell ?? '').split('\n')[0].trim();
+}
+
+/* ── 인접 IC 최대 3개(ic1_name/ic1_distance_km, ic2_*, ic3_*) 파싱 ── */
+function parseNearbyICs(o: Record<string, string>): NearbyIC[] {
+  const list: NearbyIC[] = [];
+  for (let i = 1; i <= 3; i++) {
+    const name = o[`ic${i}_name`];
+    const dist = parseFloat(o[`ic${i}_distance_km`]);
+    if (name && isFinite(dist)) list.push({ name, distance_km: dist });
+  }
+  return list;
 }
 
 /* ── Sheet1 파싱 → 기본 정보 ── */
@@ -80,6 +91,7 @@ function parseSheet1(csv: string): Omit<LogisticsCenter, 'floors' | 'floorSummar
         construction_start_date:  o.construction_start_date ?? '',
         remarks:                  o.remarks ?? '',
         history:                  o.history ?? '',
+        nearbyICs:                parseNearbyICs(o),
       };
     })
     .filter(c => c.id);
@@ -162,6 +174,7 @@ export async function fetchCenters(force = false): Promise<LogisticsCenter[]> {
         construction_start_date: c.construction_start_date ?? '',
         remarks: c.remarks ?? '',
         history: c.history ?? '',
+        nearbyICs: c.nearbyICs ?? [],
       } as LogisticsCenter;
     });
   }
@@ -195,6 +208,7 @@ export async function fetchCenters(force = false): Promise<LogisticsCenter[]> {
         construction_start_date: c.construction_start_date ?? '',
         remarks: c.remarks ?? '',
         history: c.history ?? '',
+        nearbyICs: c.nearbyICs ?? [],
       } as LogisticsCenter;
     });
   }

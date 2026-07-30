@@ -95,6 +95,20 @@ export default function DetailPanel({ center, floors, floorsLoading, unit, onClo
           </div>
         </Section>
 
+        {/* 인접 IC */}
+        {center.nearbyICs.length > 0 && (
+          <Section title="인접 IC">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {center.nearbyICs.map((ic, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                  <span style={{ color: '#0B2545', fontWeight: 500 }}>{ic.name}</span>
+                  <span style={{ color: '#64748b' }}>{ic.distance_km.toFixed(1)}km</span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
         {/* 임대 정보 */}
         <Section title="임대 정보">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '8px' }}>

@@ -58,6 +58,7 @@ function popupHTML(c: LogisticsCenter, unit: Unit): string {
       <span style="background:${dot}22;color:${dot};padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">${c.status}</span>
     </div>
     <div style="font-size:10px;color:#94a3b8;margin-top:4px;">${fmtSqm(c.gfa, unit)}${unit} · ${c.developer}</div>
+    ${c.nearbyICs[0] ? `<div style="font-size:10px;color:#94a3b8;margin-top:2px;">${c.nearbyICs[0].name} ${c.nearbyICs[0].distance_km.toFixed(1)}km</div>` : ''}
     <div style="position:absolute;bottom:-6px;left:50%;
       width:10px;height:10px;background:#fff;
       border-right:1px solid #E5E9F0;border-bottom:1px solid #E5E9F0;

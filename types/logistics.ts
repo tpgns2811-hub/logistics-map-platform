@@ -10,6 +10,11 @@ export interface FloorInfo {
   available: string;      // 입주 가능 여부 (예: "즉시", "임대완료", "26.07")
 }
 
+export interface NearbyIC {
+  name: string;
+  distance_km: number;
+}
+
 export interface LogisticsCenter {
   id: string;
   name: string;
@@ -38,4 +43,5 @@ export interface LogisticsCenter {
   construction_start_date: string;  // 착공일
   remarks: string;                  // 비고
   history: string;                  // 변경 이력
+  nearbyICs: NearbyIC[];            // 인접 IC 최대 3개(거리순 top2 + 5km 이내 3번째)
 }

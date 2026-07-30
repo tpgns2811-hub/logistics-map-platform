@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSession, signIn } from 'next-auth/react';
 
 interface Memo {
   id: number;
@@ -9,12 +10,14 @@ interface Memo {
 }
 
 export default function MemoSection({ centerId }: { centerId: string }) {
+  const { data: session, status } = useSession();
   const [memos, setMemos] = useState<Memo[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (!session?.user) { setMemos([]); setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
     fetch(`/api/memos?centerId=${encodeURIComponent(centerId)}`)
@@ -23,7 +26,21 @@ export default function MemoSection({ centerId }: { centerId: string }) {
       .catch(() => { if (!cancelled) setMemos([]); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [centerId]);
+  }, [centerId, session?.user]);
+
+  if (status === 'loading') return null;
+
+  if (!session?.user) {
+    return (
+      <div style={{ textAlign: 'center', padding: '10px 0' }}>
+        <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px' }}>Google 로그인 후 메모를 남길 수 있습니다</div>
+        <button
+          onClick={() => signIn('google')}
+          style={{ fontSize: '12px', fontWeight: 600, padding: '7px 14px', borderRadius: '6px', border: '1px solid #E5E9F0', background: '#fff', color: '#0B2545', cursor: 'pointer' }}
+        >Google로 로그인</button>
+      </div>
+    );
+  }
 
   const add = async () => {
     if (!draft.trim() || saving) return;

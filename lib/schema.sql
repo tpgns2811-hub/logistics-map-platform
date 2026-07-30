@@ -1,7 +1,7 @@
 -- LogiMap 운영자/메모 기능용 스키마 (Neon Postgres)
 -- Neon SQL Editor 또는 psql로 한 번만 실행
 
--- 사용자 메모: 로그인 없이 기기별(쿠키 device_id)로 구분
+-- 사용자 메모: 구글 로그인 계정(email)별로 구분 (device_id 컬럼명은 유지, 값은 이메일 저장)
 CREATE TABLE IF NOT EXISTS memos (
   id SERIAL PRIMARY KEY,
   center_id TEXT NOT NULL,

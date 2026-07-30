@@ -286,7 +286,7 @@ function MemoAdmin() {
             <div key={m.id} style={{ background: '#fff', border: '1px solid #E5E9F0', borderRadius: '8px', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
               <div>
                 <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
-                  건물 ID: {m.center_id} · 기기: {String(m.device_id).slice(0, 8)}... · {new Date(m.created_at).toLocaleString('ko-KR')}
+                  건물 ID: {m.center_id} · 계정: {m.device_id} · {new Date(m.created_at).toLocaleString('ko-KR')}
                 </div>
                 <div style={{ fontSize: '13px', color: '#0B2545', whiteSpace: 'pre-wrap' }}>{m.content}</div>
               </div>

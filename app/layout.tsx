@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
+import AuthProvider from '@/components/AuthProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -21,7 +22,7 @@ export default function RootLayout({
         />
       </head>
       <body style={{ minHeight: '100vh', backgroundColor: '#F5F7FA', color: '#0B2545' }}>
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

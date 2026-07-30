@@ -1,3 +1,7 @@
+'use client';
+
+import { useSession, signIn, signOut } from 'next-auth/react';
+
 interface Props {
   onRefresh?: () => void;
   lastUpdated?: Date | null;
@@ -5,6 +9,7 @@ interface Props {
 }
 
 export default function Header({ onRefresh, lastUpdated, refreshing }: Props) {
+  const { data: session, status } = useSession();
   const timeStr = lastUpdated
     ? lastUpdated.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
     : null;
@@ -61,6 +66,25 @@ export default function Header({ onRefresh, lastUpdated, refreshing }: Props) {
             </span>
             {refreshing ? '갱신 중...' : '새로고침'}
           </button>
+        )}
+
+        {/* 구글 로그인 (핀별 메모는 로그인해야 계정에 저장됨) */}
+        {status === 'loading' ? null : session?.user ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {session.user.image && (
+              <img src={session.user.image} alt="" width={26} height={26} style={{ borderRadius: '50%' }} />
+            )}
+            <span style={{ fontSize: '12px', color: '#fff' }}>{session.user.name}</span>
+            <button
+              onClick={() => signOut()}
+              style={{ background: 'none', border: '1px solid #8DA9C4', color: '#fff', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', cursor: 'pointer' }}
+            >로그아웃</button>
+          </div>
+        ) : (
+          <button
+            onClick={() => signIn('google')}
+            style={{ background: '#fff', border: 'none', color: '#0B2545', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+          >Google 로그인</button>
         )}
       </div>
 

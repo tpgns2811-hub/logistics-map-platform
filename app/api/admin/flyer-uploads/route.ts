@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const blob = await put(`flyer-uploads/${Date.now()}-${file.name}`, file, { access: 'public' });
+    const blob = await put(`flyer-uploads/${Date.now()}-${file.name}`, file, { access: 'private' });
     const rows = await sql!`
       INSERT INTO flyer_uploads (filename, vendor_label, blob_url, status)
       VALUES (${file.name}, ${vendorLabel}, ${blob.url}, 'uploaded')

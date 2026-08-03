@@ -35,3 +35,17 @@ export function verifySessionToken(token: string | undefined | null): boolean {
 export function isAdminRequest(req: NextRequest): boolean {
   return verifySessionToken(req.cookies.get(ADMIN_COOKIE)?.value);
 }
+
+// 로컬 파이프라인 스크립트가 호출하는 ingest 전용 엔드포인트 인증.
+// 브라우저 세션(쿠키)이 없는 기계 간 호출이라 ADMIN_PASSWORD와 별개의 토큰을 씀.
+const INGEST_API_TOKEN = process.env.INGEST_API_TOKEN ?? '';
+
+export function isIngestRequest(req: NextRequest): boolean {
+  if (!INGEST_API_TOKEN) return false;
+  const auth = req.headers.get('authorization') ?? '';
+  const [scheme, token] = auth.split(' ');
+  if (scheme !== 'Bearer' || !token) return false;
+  const a = Buffer.from(token);
+  const b = Buffer.from(INGEST_API_TOKEN);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}

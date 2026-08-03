@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql, dbEnabled } from '@/lib/db';
 import { isAdminRequest } from '@/lib/adminAuth';
+import { fetchCenters } from '@/lib/fetchCenters';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { action, data } = await req.json();
   if (!['update', 'delete', 'create'].includes(action)) {
     return NextResponse.json({ error: 'invalid action' }, { status: 400 });
+  }
+
+  if (action === 'create') {
+    // applyOverrides()는 이미 시트에 있는 id로 create 오버레이가 들어오면 조용히 무시하므로,
+    // 저장 시점에 미리 막아서 그 상태를 명확히 알림
+    const centers = await fetchCenters();
+    if (centers.some(c => c.id === id)) {
+      return NextResponse.json({ error: '이미 존재하는 건물 ID입니다' }, { status: 409 });
+    }
   }
 
   try {

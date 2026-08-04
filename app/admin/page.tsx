@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { LogisticsCenter, TempType, CenterStatus } from '@/types/logistics';
 import type { PendingChange } from '@/types/pendingChange';
 
@@ -489,11 +489,19 @@ function FlyerUploads() {
   const [vendorLabel, setVendorLabel] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = () => {
     fetch('/api/admin/flyer-uploads').then(r => r.json()).then(({ uploads }) => setUploads(uploads ?? []));
   };
   useEffect(load, []);
+
+  const pickFile = (f: File | null) => {
+    setError('');
+    if (f && f.type !== 'application/pdf') { setError('PDF 파일만 업로드할 수 있습니다'); return; }
+    setFile(f);
+  };
 
   const upload = async () => {
     if (!file) { setError('PDF 파일을 선택하세요'); return; }
@@ -517,12 +525,36 @@ function FlyerUploads() {
   return (
     <div style={{ background: '#fff', border: '1px solid #E5E9F0', borderRadius: '8px', padding: '14px', marginBottom: '16px' }}>
       <div style={{ fontSize: '13px', fontWeight: 700, color: '#0B2545', marginBottom: '10px' }}>임대안내문 업로드</div>
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+
+      <div
+        onClick={() => fileInputRef.current?.click()}
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => {
+          e.preventDefault();
+          setDragOver(false);
+          pickFile(e.dataTransfer.files?.[0] ?? null);
+        }}
+        style={{
+          border: `2px dashed ${dragOver ? '#0B2545' : '#E5E9F0'}`, borderRadius: '8px', padding: '18px',
+          textAlign: 'center', cursor: 'pointer', marginBottom: '8px',
+          background: dragOver ? '#F5F7FA' : 'transparent', transition: 'background 0.15s, border-color 0.15s',
+        }}
+      >
         <input
+          ref={fileInputRef}
           type="file" accept="application/pdf"
-          onChange={e => setFile(e.target.files?.[0] ?? null)}
-          style={{ fontSize: '12px' }}
+          onChange={e => pickFile(e.target.files?.[0] ?? null)}
+          style={{ display: 'none' }}
         />
+        {file ? (
+          <div style={{ fontSize: '12px', color: '#0B2545', fontWeight: 600 }}>선택된 파일: {file.name}</div>
+        ) : (
+          <div style={{ fontSize: '12px', color: '#94a3b8' }}>PDF 파일을 여기로 드래그하거나 클릭해서 선택하세요</div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
         <input
           value={vendorLabel} onChange={e => setVendorLabel(e.target.value)}
           placeholder="벤더 라벨 (예: PineEstate, 에스원)"

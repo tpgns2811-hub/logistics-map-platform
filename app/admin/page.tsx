@@ -507,19 +507,23 @@ function FlyerUploads() {
     if (!file) { setError('PDF 파일을 선택하세요'); return; }
     setUploading(true);
     setError('');
-    const form = new FormData();
-    form.append('file', file);
-    form.append('vendor_label', vendorLabel);
-    const res = await fetch('/api/admin/flyer-uploads', { method: 'POST', body: form });
-    setUploading(false);
-    if (!res.ok) {
-      const { error } = await res.json().catch(() => ({ error: '업로드 실패' }));
-      setError(error ?? '업로드 실패');
-      return;
+    try {
+      // 브라우저에서 Blob storage로 직접 업로드(서버를 거치지 않음) - 서버리스
+      // 함수의 요청 본문 크기 제한(~4.5MB)을 우회해서 큰 PDF도 올릴 수 있음
+      const { upload: uploadToBlob } = await import('@vercel/blob/client');
+      await uploadToBlob(file.name, file, {
+        access: 'private',
+        handleUploadUrl: '/api/admin/flyer-uploads/upload-handler',
+        clientPayload: JSON.stringify({ filename: file.name, vendorLabel }),
+      });
+      setFile(null);
+      setVendorLabel('');
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '업로드 실패');
+    } finally {
+      setUploading(false);
     }
-    setFile(null);
-    setVendorLabel('');
-    load();
   };
 
   return (

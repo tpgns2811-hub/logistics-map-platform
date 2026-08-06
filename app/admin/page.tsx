@@ -591,86 +591,200 @@ function FlyerUploads() {
   );
 }
 
+type ViewStatus = 'pending' | 'approved' | 'rejected';
+const VIEW_STATUS_LABEL: Record<ViewStatus, string> = { pending: '대기 중', approved: '승인됨', rejected: '거절됨' };
+
+function ChangeDiff({ c }: { c: PendingChange }) {
+  return (
+    <div style={{ background: '#F5F7FA', borderRadius: '6px', padding: '8px 10px', marginBottom: '10px' }}>
+      {c.change_type === 'update' ? (
+        (c.changed_fields ?? Object.keys(c.after_data)).map(k => (
+          <div key={k} style={{ display: 'flex', gap: '8px', fontSize: '12px', padding: '3px 0' }}>
+            <span style={{ color: '#64748b', minWidth: '90px' }}>{k}</span>
+            <span style={{ color: '#ef4444', textDecoration: 'line-through' }}>{String(c.before_data?.[k] ?? '(없음)')}</span>
+            <span style={{ color: '#94a3b8' }}>→</span>
+            <span style={{ color: '#16794f', fontWeight: 600 }}>{String(c.after_data[k])}</span>
+          </div>
+        ))
+      ) : (
+        Object.entries(c.after_data).map(([k, v]) => (
+          <div key={k} style={{ display: 'flex', gap: '8px', fontSize: '12px', padding: '3px 0' }}>
+            <span style={{ color: '#64748b', minWidth: '90px' }}>{k}</span>
+            <span style={{ color: '#16794f' }}>{String(v)}</span>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
 function PendingChangesAdmin({ onCountChange }: { onCountChange: (n: number) => void }) {
+  const [viewStatus, setViewStatus] = useState<ViewStatus>('pending');
   const [changes, setChanges] = useState<PendingChange[]>([]);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<Record<number, string>>({});
+  const [notesById, setNotesById] = useState<Record<number, string>>({});
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkNotes, setBulkNotes] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [pendingCount, setPendingCountLocal] = useState(0);
 
-  const load = () => {
+  const load = (status: ViewStatus) => {
     setLoading(true);
-    fetch('/api/admin/pending-changes?status=pending')
+    setSelected(new Set());
+    fetch(`/api/admin/pending-changes?status=${status}`)
       .then(r => r.json())
-      .then(({ changes }) => { setChanges(changes ?? []); onCountChange((changes ?? []).length); })
+      .then(({ changes }) => {
+        setChanges(changes ?? []);
+        if (status === 'pending') { onCountChange((changes ?? []).length); setPendingCountLocal((changes ?? []).length); }
+      })
       .finally(() => setLoading(false));
   };
-  useEffect(load, []);
+  useEffect(() => load(viewStatus), [viewStatus]);
 
-  const act = async (id: number, action: 'approve' | 'reject') => {
+  const act = async (id: number, action: 'approve' | 'reject', notes?: string) => {
     setErrors(prev => { const n = { ...prev }; delete n[id]; return n; });
     const res = await fetch(`/api/admin/pending-changes/${id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, notes: notes || undefined }),
     });
     if (!res.ok) {
       const { error } = await res.json().catch(() => ({ error: '처리 실패' }));
       setErrors(prev => ({ ...prev, [id]: error ?? '처리 실패' }));
-      return;
+      return false;
     }
     setChanges(prev => {
       const next = prev.filter(c => c.id !== id);
-      onCountChange(next.length);
+      if (viewStatus === 'pending') { onCountChange(next.length); setPendingCountLocal(next.length); }
       return next;
     });
+    setSelected(prev => { const n = new Set(prev); n.delete(id); return n; });
+    return true;
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelected(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelected(prev => prev.size === changes.length ? new Set() : new Set(changes.map(c => c.id)));
+  };
+
+  const bulkAct = async (action: 'approve' | 'reject') => {
+    setBulkBusy(true);
+    const ids = Array.from(selected);
+    for (const id of ids) {
+      await act(id, action, bulkNotes);
+    }
+    setBulkNotes('');
+    setBulkBusy(false);
   };
 
   return (
     <div>
-      <div style={{ fontSize: '13px', fontWeight: 700, color: '#0B2545', margin: '4px 0 10px' }}>검토 대기 목록</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', margin: '4px 0 10px' }}>
+        <div style={{ fontSize: '13px', fontWeight: 700, color: '#0B2545', marginRight: '10px' }}>검토 목록</div>
+        {(['pending', 'approved', 'rejected'] as ViewStatus[]).map(s => (
+          <button key={s} onClick={() => setViewStatus(s)} style={{
+            padding: '5px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px',
+            background: viewStatus === s ? '#0B2545' : '#F5F7FA', color: viewStatus === s ? '#fff' : '#64748b', fontWeight: viewStatus === s ? 600 : 400,
+          }}>
+            {VIEW_STATUS_LABEL[s]}{s === 'pending' && pendingCount > 0 ? ` (${pendingCount})` : ''}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>불러오는 중...</div>
       ) : changes.length === 0 ? (
-        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>검토 대기 중인 변경사항이 없습니다</div>
+        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+          {viewStatus === 'pending' ? '검토 대기 중인 변경사항이 없습니다' : `${VIEW_STATUS_LABEL[viewStatus]} 항목이 없습니다`}
+        </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {changes.map(c => (
-            <div key={c.id} style={{ background: '#fff', border: '1px solid #E5E9F0', borderRadius: '8px', padding: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <span style={{ background: SOURCE_COLOR[c.source], color: '#fff', fontSize: '10px', fontWeight: 700, borderRadius: '4px', padding: '2px 7px' }}>
-                  {SOURCE_LABEL[c.source] ?? c.source}
-                </span>
-                <span style={{ fontSize: '11px', color: '#64748b' }}>{c.change_type === 'create' ? '신규 건물' : '정보 수정'}</span>
-                <span style={{ fontSize: '12px', color: '#0B2545', fontWeight: 600 }}>{c.center_id}</span>
-                <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: 'auto' }}>{new Date(c.detected_at).toLocaleString('ko-KR')}</span>
-              </div>
+        <>
+          {viewStatus === 'pending' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b', marginBottom: '8px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={selected.size === changes.length && changes.length > 0} onChange={toggleSelectAll} />
+              전체 선택 ({selected.size}/{changes.length})
+            </label>
+          )}
 
-              <div style={{ background: '#F5F7FA', borderRadius: '6px', padding: '8px 10px', marginBottom: '10px' }}>
-                {c.change_type === 'update' ? (
-                  (c.changed_fields ?? Object.keys(c.after_data)).map(k => (
-                    <div key={k} style={{ display: 'flex', gap: '8px', fontSize: '12px', padding: '3px 0' }}>
-                      <span style={{ color: '#64748b', minWidth: '90px' }}>{k}</span>
-                      <span style={{ color: '#ef4444', textDecoration: 'line-through' }}>{String(c.before_data?.[k] ?? '(없음)')}</span>
-                      <span style={{ color: '#94a3b8' }}>→</span>
-                      <span style={{ color: '#16794f', fontWeight: 600 }}>{String(c.after_data[k])}</span>
-                    </div>
-                  ))
-                ) : (
-                  Object.entries(c.after_data).map(([k, v]) => (
-                    <div key={k} style={{ display: 'flex', gap: '8px', fontSize: '12px', padding: '3px 0' }}>
-                      <span style={{ color: '#64748b', minWidth: '90px' }}>{k}</span>
-                      <span style={{ color: '#16794f' }}>{String(v)}</span>
-                    </div>
-                  ))
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {changes.map(c => (
+              <div key={c.id} style={{ background: '#fff', border: selected.has(c.id) ? '1px solid #0B2545' : '1px solid #E5E9F0', borderRadius: '8px', padding: '14px', display: 'flex', gap: '10px' }}>
+                {viewStatus === 'pending' && (
+                  <input
+                    type="checkbox" checked={selected.has(c.id)} onChange={() => toggleSelect(c.id)}
+                    style={{ marginTop: '3px', flexShrink: 0, cursor: 'pointer' }}
+                  />
                 )}
-              </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{ background: SOURCE_COLOR[c.source], color: '#fff', fontSize: '10px', fontWeight: 700, borderRadius: '4px', padding: '2px 7px' }}>
+                      {SOURCE_LABEL[c.source] ?? c.source}
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>{c.change_type === 'create' ? '신규 건물' : '정보 수정'}</span>
+                    <span style={{ fontSize: '12px', color: '#0B2545', fontWeight: 600 }}>{c.center_id}</span>
+                    {viewStatus !== 'pending' && (
+                      <span style={{
+                        fontSize: '10px', fontWeight: 700, borderRadius: '4px', padding: '2px 7px',
+                        background: viewStatus === 'approved' ? '#16794f' : '#ef4444', color: '#fff',
+                      }}>{VIEW_STATUS_LABEL[viewStatus]}</span>
+                    )}
+                    <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: 'auto' }}>{new Date(c.detected_at).toLocaleString('ko-KR')}</span>
+                  </div>
 
-              {errors[c.id] && <div style={{ fontSize: '12px', color: '#ef4444', marginBottom: '8px' }}>{errors[c.id]}</div>}
+                  <ChangeDiff c={c} />
 
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => act(c.id, 'approve')} style={{ padding: '7px 14px', borderRadius: '6px', border: 'none', background: '#16794f', color: '#fff', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}>승인</button>
-                <button onClick={() => act(c.id, 'reject')} style={{ padding: '7px 14px', borderRadius: '6px', border: '1px solid #E5E9F0', background: '#fff', color: '#ef4444', fontSize: '12px', cursor: 'pointer' }}>거절</button>
+                  {viewStatus !== 'pending' ? (
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>
+                      {c.reviewer && <span>처리자: {c.reviewer}{c.reviewed_at ? ` · ${new Date(c.reviewed_at).toLocaleString('ko-KR')}` : ''}</span>}
+                      {c.notes && <div style={{ marginTop: '4px', color: '#0B2545', whiteSpace: 'pre-wrap' }}>메모: {c.notes}</div>}
+                    </div>
+                  ) : (
+                    <>
+                      <textarea
+                        value={notesById[c.id] ?? ''} onChange={e => setNotesById(prev => ({ ...prev, [c.id]: e.target.value }))}
+                        placeholder="검토 메모(선택)"
+                        style={{ width: '100%', minHeight: '40px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #E5E9F0', fontSize: '12px', boxSizing: 'border-box', marginBottom: '8px', resize: 'vertical', fontFamily: 'inherit' }}
+                      />
+                      {errors[c.id] && <div style={{ fontSize: '12px', color: '#ef4444', marginBottom: '8px' }}>{errors[c.id]}</div>}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button onClick={() => act(c.id, 'approve', notesById[c.id])} style={{ padding: '7px 14px', borderRadius: '6px', border: 'none', background: '#16794f', color: '#fff', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}>승인</button>
+                        <button onClick={() => act(c.id, 'reject', notesById[c.id])} style={{ padding: '7px 14px', borderRadius: '6px', border: '1px solid #E5E9F0', background: '#fff', color: '#ef4444', fontSize: '12px', cursor: 'pointer' }}>거절</button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+        </>
+      )}
+
+      {viewStatus === 'pending' && selected.size > 0 && (
+        <div style={{
+          position: 'sticky', bottom: '16px', marginTop: '14px', background: '#0B2545', borderRadius: '10px',
+          padding: '12px 14px', boxShadow: '0 6px 20px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
+        }}>
+          <span style={{ color: '#fff', fontSize: '12px', fontWeight: 600 }}>{selected.size}건 선택됨</span>
+          <input
+            value={bulkNotes} onChange={e => setBulkNotes(e.target.value)}
+            placeholder="일괄 처리 메모(선택)"
+            style={{ flex: 1, minWidth: '160px', padding: '7px 9px', borderRadius: '6px', border: 'none', fontSize: '12px' }}
+          />
+          <button onClick={() => bulkAct('approve')} disabled={bulkBusy} style={{
+            padding: '7px 14px', borderRadius: '6px', border: 'none', background: '#16794f', color: '#fff',
+            fontWeight: 600, fontSize: '12px', cursor: bulkBusy ? 'not-allowed' : 'pointer', opacity: bulkBusy ? 0.6 : 1,
+          }}>{bulkBusy ? '처리 중...' : '일괄 승인'}</button>
+          <button onClick={() => bulkAct('reject')} disabled={bulkBusy} style={{
+            padding: '7px 14px', borderRadius: '6px', border: 'none', background: '#ef4444', color: '#fff',
+            fontWeight: 600, fontSize: '12px', cursor: bulkBusy ? 'not-allowed' : 'pointer', opacity: bulkBusy ? 0.6 : 1,
+          }}>{bulkBusy ? '처리 중...' : '일괄 거절'}</button>
         </div>
       )}
     </div>

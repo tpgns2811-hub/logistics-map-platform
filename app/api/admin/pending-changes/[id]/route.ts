@@ -21,7 +21,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   try {
     const result = action === 'approve'
-      ? await approvePendingChange(numId, reviewer ?? 'admin')
+      ? await approvePendingChange(numId, reviewer ?? 'admin', notes)
       : await rejectPendingChange(numId, reviewer ?? 'admin', notes);
 
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });

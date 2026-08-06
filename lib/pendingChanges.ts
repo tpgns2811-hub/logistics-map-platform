@@ -66,7 +66,8 @@ interface PendingChangeRow {
 
 export async function approvePendingChange(
   id: number,
-  reviewer: string
+  reviewer: string,
+  notes?: string
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const db = requireDb();
 
@@ -100,7 +101,7 @@ export async function approvePendingChange(
           updated_at = now()
   `;
 
-  await db`UPDATE pending_changes SET status = 'approved', reviewed_at = now(), reviewer = ${reviewer} WHERE id = ${id}`;
+  await db`UPDATE pending_changes SET status = 'approved', reviewed_at = now(), reviewer = ${reviewer}, notes = ${notes ?? null} WHERE id = ${id}`;
   return { ok: true };
 }
 

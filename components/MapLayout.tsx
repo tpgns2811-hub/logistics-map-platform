@@ -34,12 +34,18 @@ export default function MapLayout() {
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
   const [mapReady,     setMapReady]     = useState(false);
   const [isMobile,     setIsMobile]     = useState(false);
+  const [statsOpen,    setStatsOpen]    = useState(false);
 
   useEffect(() => {
+    // 모바일에서 키보드가 올라올 때도 window resize가 발생함(높이만 변함, innerWidth는 그대로).
+    // "모바일이면 무조건 닫기"로 매 resize마다 실행하면 검색창 포커스만 줘도 사이드바가
+    // 닫혀버려서, 데스크톱<->모바일 폭 기준을 실제로 "넘어갈 때"만 닫도록 이전 상태와 비교함.
     const check = () => {
       const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      if (mobile) setSidebarOpen(false);
+      setIsMobile(prev => {
+        if (!prev && mobile) setSidebarOpen(false);
+        return mobile;
+      });
     };
     check();
     window.addEventListener('resize', check);
@@ -205,22 +211,46 @@ export default function MapLayout() {
             {sidebarOpen ? '◀' : '▶'}
           </button>
 
-          {/* 통계 카드 */}
-          <div style={{
-            position: 'absolute', top: '16px', left: '44px',
-            background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)',
-            border: '1px solid #E5E9F0', borderRadius: '10px',
-            padding: '10px 14px', zIndex: 16,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.08)', minWidth: '140px',
-          }}>
-            <div style={{ fontSize: '10px', color: '#8DA9C4', textTransform: 'uppercase', letterSpacing: '0.5px' }}>표시 중</div>
-            <div style={{ fontSize: '22px', fontWeight: 700, color: '#0B2545', lineHeight: 1.1 }}>{stats.total}</div>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-              <span style={{ fontSize: '10px', fontWeight: 600, color: TEMP_META['상온'].color }}>{TEMP_META['상온'].char} {stats.warm}</span>
-              <span style={{ fontSize: '10px', fontWeight: 600, color: TEMP_META['저온'].color }}>{TEMP_META['저온'].char} {stats.cold}</span>
-              <span style={{ fontSize: '10px', fontWeight: 600, color: TEMP_META['복합'].color }}>{TEMP_META['복합'].char} {stats.mixed}</span>
+          {/* 통계 카드 - 모바일에서는 총 개수만 한 줄로 축소, 탭하면 온도별 내역 펼침 */}
+          {isMobile ? (
+            <div
+              onClick={() => setStatsOpen(v => !v)}
+              style={{
+                position: 'absolute', top: '16px', left: '44px',
+                background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)',
+                border: '1px solid #E5E9F0', borderRadius: '10px',
+                padding: '6px 12px', zIndex: 16, cursor: 'pointer',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+                display: 'flex', alignItems: 'center', gap: '6px',
+              }}
+            >
+              <span style={{ fontSize: '10px', color: '#8DA9C4' }}>표시</span>
+              <span style={{ fontSize: '15px', fontWeight: 700, color: '#0B2545', lineHeight: 1 }}>{stats.total}</span>
+              {statsOpen && (
+                <div style={{ display: 'flex', gap: '7px', marginLeft: '2px', paddingLeft: '7px', borderLeft: '1px solid #E5E9F0' }}>
+                  <span style={{ fontSize: '10px', fontWeight: 600, color: TEMP_META['상온'].color }}>{TEMP_META['상온'].char} {stats.warm}</span>
+                  <span style={{ fontSize: '10px', fontWeight: 600, color: TEMP_META['저온'].color }}>{TEMP_META['저온'].char} {stats.cold}</span>
+                  <span style={{ fontSize: '10px', fontWeight: 600, color: TEMP_META['복합'].color }}>{TEMP_META['복합'].char} {stats.mixed}</span>
+                </div>
+              )}
             </div>
-          </div>
+          ) : (
+            <div style={{
+              position: 'absolute', top: '16px', left: '44px',
+              background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)',
+              border: '1px solid #E5E9F0', borderRadius: '10px',
+              padding: '10px 14px', zIndex: 16,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.08)', minWidth: '140px',
+            }}>
+              <div style={{ fontSize: '10px', color: '#8DA9C4', textTransform: 'uppercase', letterSpacing: '0.5px' }}>표시 중</div>
+              <div style={{ fontSize: '22px', fontWeight: 700, color: '#0B2545', lineHeight: 1.1 }}>{stats.total}</div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                <span style={{ fontSize: '10px', fontWeight: 600, color: TEMP_META['상온'].color }}>{TEMP_META['상온'].char} {stats.warm}</span>
+                <span style={{ fontSize: '10px', fontWeight: 600, color: TEMP_META['저온'].color }}>{TEMP_META['저온'].char} {stats.cold}</span>
+                <span style={{ fontSize: '10px', fontWeight: 600, color: TEMP_META['복합'].color }}>{TEMP_META['복합'].char} {stats.mixed}</span>
+              </div>
+            </div>
+          )}
 
           <KakaoMap
             allCenters={centers}
@@ -232,7 +262,7 @@ export default function MapLayout() {
             onReady={() => setMapReady(true)}
             isMobile={isMobile}
           />
-          <Legend />
+          <Legend isMobile={isMobile} />
           <DetailPanel
             center={selectedCenter}
             floors={selectedFloors}

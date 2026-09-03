@@ -505,6 +505,28 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
     borderRadius: '6px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
   };
 
+  const unitButtons = (['평', '㎡'] as Unit[]).map((u, i) => (
+    <button key={u} onClick={() => onUnit(u)} style={{
+      padding: '5px 12px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap',
+      background: unit === u ? '#0B2545' : 'transparent',
+      color: unit === u ? '#fff' : '#64748b',
+      border: 'none', borderLeft: i > 0 ? '1px solid #E5E9F0' : 'none', cursor: 'pointer',
+    }}>
+      {u}
+    </button>
+  ));
+
+  const mapTypeButtons = MAP_TYPES.map(({ key, label }, i) => (
+    <button key={key} onClick={() => setMapType(key)} style={{
+      padding: '5px 11px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap',
+      background: mapType === key ? '#0B2545' : 'transparent',
+      color: mapType === key ? '#fff' : '#64748b',
+      border: 'none', borderLeft: i > 0 ? '1px solid #E5E9F0' : 'none', cursor: 'pointer',
+    }}>
+      {label}
+    </button>
+  ));
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div
@@ -512,33 +534,21 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
         style={{ width: '100%', height: '100%', touchAction: 'none', overscrollBehavior: 'contain' }}
       />
 
-      {/* 면적 단위 토글 (새로고침 ↔ 지도 사이, 최상단) */}
-      <div style={{ ...toggleBox, top: '16px' }}>
-        {(['평', '㎡'] as Unit[]).map((u, i) => (
-          <button key={u} onClick={() => onUnit(u)} style={{
-            padding: '5px 12px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap',
-            background: unit === u ? '#0B2545' : 'transparent',
-            color: unit === u ? '#fff' : '#64748b',
-            border: 'none', borderLeft: i > 0 ? '1px solid #E5E9F0' : 'none', cursor: 'pointer',
-          }}>
-            {u}
-          </button>
-        ))}
-      </div>
-
-      {/* 지도 버전 토글 (단위 토글 아래) */}
-      <div style={{ ...toggleBox, top: '54px' }}>
-        {MAP_TYPES.map(({ key, label }, i) => (
-          <button key={key} onClick={() => setMapType(key)} style={{
-            padding: '5px 11px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap',
-            background: mapType === key ? '#0B2545' : 'transparent',
-            color: mapType === key ? '#fff' : '#64748b',
-            border: 'none', borderLeft: i > 0 ? '1px solid #E5E9F0' : 'none', cursor: 'pointer',
-          }}>
-            {label}
-          </button>
-        ))}
-      </div>
+      {isMobile ? (
+        // 모바일: 단위 토글 + 지도타입 토글을 한 줄(박스 하나)로 합쳐 세로 공간을 아낌
+        <div style={{ ...toggleBox, top: '16px' }}>
+          {unitButtons}
+          <div style={{ width: '1px', background: '#E5E9F0' }} />
+          {mapTypeButtons}
+        </div>
+      ) : (
+        <>
+          {/* 면적 단위 토글 (새로고침 ↔ 지도 사이, 최상단) */}
+          <div style={{ ...toggleBox, top: '16px' }}>{unitButtons}</div>
+          {/* 지도 버전 토글 (단위 토글 아래) */}
+          <div style={{ ...toggleBox, top: '54px' }}>{mapTypeButtons}</div>
+        </>
+      )}
     </div>
   );
 }

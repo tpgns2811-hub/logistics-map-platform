@@ -33,13 +33,15 @@ interface Props {
   unit: Unit; // 리스트 면적 표시용 (토글 UI는 지도 우상단으로 이동)
   selectedId: string | null;
   onSelect: (id: string) => void;
+  isMobile?: boolean;
 }
 
 const ROW_H = 76;
 const OVERSCAN = 6;
 
-const chip = (active: boolean): React.CSSProperties => ({
-  padding: '4px 10px', borderRadius: '20px', fontSize: '11px', cursor: 'pointer',
+const chip = (active: boolean, isMobile?: boolean): React.CSSProperties => ({
+  padding: isMobile ? '10px 14px' : '4px 10px', borderRadius: '20px', fontSize: isMobile ? '13px' : '11px', cursor: 'pointer',
+  ...(isMobile ? { minHeight: '44px', display: 'inline-flex' as const, alignItems: 'center' as const } : {}),
   border: `1px solid ${active ? '#0B2545' : '#E5E9F0'}`,
   background: active ? '#0B2545' : '#fff',
   color: active ? '#fff' : '#64748b',
@@ -62,7 +64,7 @@ export default function Sidebar({
   completionYearRange, onCompletionYearRange, permitYearRange, onPermitYearRange,
   floorMin, onFloorMin,
   availableOnly, onAvailableOnly, unit,
-  selectedId, onSelect,
+  selectedId, onSelect, isMobile,
 }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -75,6 +77,9 @@ export default function Sidebar({
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, []);
+
+  // 모바일 전환 시에만 자동으로 접음(데스크톱 복귀 시 강제 재오픈은 안 함 - 수동 토글과 안 싸우게)
+  useEffect(() => { if (isMobile) setFiltersOpen(false); }, [isMobile]);
 
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = 0;
@@ -122,6 +127,8 @@ export default function Sidebar({
           box-shadow:0 1px 3px rgba(0,0,0,.3); cursor:pointer; }
         .gfa-dual::-webkit-slider-runnable-track { background:transparent; height:0; }
         .gfa-dual::-moz-range-track { background:transparent; height:0; }
+        .gfa-dual--mobile::-webkit-slider-thumb { width:26px; height:26px; }
+        .gfa-dual--mobile::-moz-range-thumb { width:26px; height:26px; }
       `}</style>
 
       {/* 검색 */}
@@ -168,12 +175,12 @@ export default function Sidebar({
         </button>
 
         {filtersOpen && (
-          <div>
+          <div style={isMobile ? { maxHeight: '45vh', overflowY: 'auto' } : undefined}>
             {/* 온도 */}
             <div style={sectionLabel}>온도구분</div>
             <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
               {(['all', '상온', '저온', '복합'] as const).map(v => (
-                <button key={v} onClick={() => onTempFilter(v)} style={chip(tempFilter === v)}>
+                <button key={v} onClick={() => onTempFilter(v)} style={chip(tempFilter === v, isMobile)}>
                   {v === 'all' ? '전체' : v}
                 </button>
               ))}
@@ -183,7 +190,7 @@ export default function Sidebar({
             <div style={sectionLabel}>운영상태</div>
             <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
               {(['all', '운영중', '공사중', '미착공'] as const).map(v => (
-                <button key={v} onClick={() => onStatusFilter(v)} style={chip(statusFilter === v)}>
+                <button key={v} onClick={() => onStatusFilter(v)} style={chip(statusFilter === v, isMobile)}>
                   {v === 'all' ? '전체' : v}
                 </button>
               ))}
@@ -195,7 +202,7 @@ export default function Sidebar({
               {GFA_PRESETS.map(p => {
                 const active = gfaRange[0] === p.min && gfaRange[1] === p.max;
                 return (
-                  <button key={p.label} onClick={() => onGfaRange([p.min, p.max])} style={chip(active)}>
+                  <button key={p.label} onClick={() => onGfaRange([p.min, p.max])} style={chip(active, isMobile)}>
                     {p.label}
                   </button>
                 );
@@ -212,12 +219,12 @@ export default function Sidebar({
                 <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', height: '4px', background: '#0B2545', borderRadius: '2px', left: `${pctMin}%`, right: `${100 - pctMax}%` }} />
                 {/* min thumb */}
                 <input
-                  className="gfa-dual" type="range" min={0} max={GFA_SLIDER_MAX} step={GFA_STEP} value={gfaRange[0]}
+                  className={`gfa-dual${isMobile ? ' gfa-dual--mobile' : ''}`} type="range" min={0} max={GFA_SLIDER_MAX} step={GFA_STEP} value={gfaRange[0]}
                   onChange={e => onGfaRange([Math.min(+e.target.value, gfaRange[1]), gfaRange[1]])}
                 />
                 {/* max thumb */}
                 <input
-                  className="gfa-dual" type="range" min={0} max={GFA_SLIDER_MAX} step={GFA_STEP} value={gfaRange[1]}
+                  className={`gfa-dual${isMobile ? ' gfa-dual--mobile' : ''}`} type="range" min={0} max={GFA_SLIDER_MAX} step={GFA_STEP} value={gfaRange[1]}
                   onChange={e => onGfaRange([gfaRange[0], Math.max(+e.target.value, gfaRange[0])])}
                 />
               </div>
@@ -233,11 +240,11 @@ export default function Sidebar({
                 <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: 0, right: 0, height: '4px', background: '#E5E9F0', borderRadius: '2px' }} />
                 <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', height: '4px', background: '#0B2545', borderRadius: '2px', left: `${compPctMin}%`, right: `${100 - compPctMax}%` }} />
                 <input
-                  className="gfa-dual" type="range" min={YEAR_MIN} max={YEAR_MAX} step={1} value={completionYearRange[0]}
+                  className={`gfa-dual${isMobile ? ' gfa-dual--mobile' : ''}`} type="range" min={YEAR_MIN} max={YEAR_MAX} step={1} value={completionYearRange[0]}
                   onChange={e => onCompletionYearRange([Math.min(+e.target.value, completionYearRange[1]), completionYearRange[1]])}
                 />
                 <input
-                  className="gfa-dual" type="range" min={YEAR_MIN} max={YEAR_MAX} step={1} value={completionYearRange[1]}
+                  className={`gfa-dual${isMobile ? ' gfa-dual--mobile' : ''}`} type="range" min={YEAR_MIN} max={YEAR_MAX} step={1} value={completionYearRange[1]}
                   onChange={e => onCompletionYearRange([completionYearRange[0], Math.max(+e.target.value, completionYearRange[0])])}
                 />
               </div>
@@ -253,11 +260,11 @@ export default function Sidebar({
                 <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: 0, right: 0, height: '4px', background: '#E5E9F0', borderRadius: '2px' }} />
                 <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', height: '4px', background: '#0B2545', borderRadius: '2px', left: `${permPctMin}%`, right: `${100 - permPctMax}%` }} />
                 <input
-                  className="gfa-dual" type="range" min={YEAR_MIN} max={YEAR_MAX} step={1} value={permitYearRange[0]}
+                  className={`gfa-dual${isMobile ? ' gfa-dual--mobile' : ''}`} type="range" min={YEAR_MIN} max={YEAR_MAX} step={1} value={permitYearRange[0]}
                   onChange={e => onPermitYearRange([Math.min(+e.target.value, permitYearRange[1]), permitYearRange[1]])}
                 />
                 <input
-                  className="gfa-dual" type="range" min={YEAR_MIN} max={YEAR_MAX} step={1} value={permitYearRange[1]}
+                  className={`gfa-dual${isMobile ? ' gfa-dual--mobile' : ''}`} type="range" min={YEAR_MIN} max={YEAR_MAX} step={1} value={permitYearRange[1]}
                   onChange={e => onPermitYearRange([permitYearRange[0], Math.max(+e.target.value, permitYearRange[0])])}
                 />
               </div>
@@ -267,11 +274,11 @@ export default function Sidebar({
             <div style={sectionLabel}>조건</div>
             <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
               {FLOOR_OPTIONS.map(o => (
-                <button key={o.value} onClick={() => onFloorMin(o.value)} style={chip(floorMin === o.value)}>
+                <button key={o.value} onClick={() => onFloorMin(o.value)} style={chip(floorMin === o.value, isMobile)}>
                   {o.label}
                 </button>
               ))}
-              <button onClick={() => onAvailableOnly(!availableOnly)} style={chip(availableOnly)}>
+              <button onClick={() => onAvailableOnly(!availableOnly)} style={chip(availableOnly, isMobile)}>
                 입주상담 가능
               </button>
             </div>

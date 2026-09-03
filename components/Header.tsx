@@ -6,9 +6,10 @@ interface Props {
   onRefresh?: () => void;
   lastUpdated?: Date | null;
   refreshing?: boolean;
+  isMobile?: boolean;
 }
 
-export default function Header({ onRefresh, lastUpdated, refreshing }: Props) {
+export default function Header({ onRefresh, lastUpdated, refreshing, isMobile }: Props) {
   const { data: session, status } = useSession();
   const timeStr = lastUpdated
     ? lastUpdated.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
@@ -17,7 +18,7 @@ export default function Header({ onRefresh, lastUpdated, refreshing }: Props) {
   return (
     <header style={{
       height: '64px', backgroundColor: '#0B2545', color: 'white',
-      display: 'flex', alignItems: 'center', padding: '0 24px',
+      display: 'flex', alignItems: 'center', padding: isMobile ? '0 12px' : '0 24px',
       boxShadow: '0 2px 8px rgba(0,0,0,0.2)', zIndex: 10, flexShrink: 0,
     }}>
       {/* 로고 */}
@@ -31,16 +32,18 @@ export default function Header({ onRefresh, lastUpdated, refreshing }: Props) {
         <h1 style={{ fontSize: '20px', fontWeight: 600, letterSpacing: '-0.3px', margin: 0 }}>
           LogiMap
         </h1>
-        <span style={{ fontSize: '11px', color: '#8DA9C4', marginLeft: '4px' }}>
-          Logistics Real Estate Intelligence
-        </span>
+        {!isMobile && (
+          <span style={{ fontSize: '11px', color: '#8DA9C4', marginLeft: '4px' }}>
+            Logistics Real Estate Intelligence
+          </span>
+        )}
       </div>
 
       {/* 우측 영역 */}
-      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '16px' }}>
 
         {/* 갱신 시간 */}
-        {timeStr && (
+        {!isMobile && timeStr && (
           <span style={{ fontSize: '11px', color: '#8DA9C4' }}>
             {timeStr} 갱신
           </span>
@@ -52,10 +55,11 @@ export default function Header({ onRefresh, lastUpdated, refreshing }: Props) {
             onClick={onRefresh}
             disabled={refreshing}
             title="Google Sheets에서 최신 데이터 불러오기"
+            aria-label="새로고침"
             style={{
               display: 'flex', alignItems: 'center', gap: '5px',
               background: '#13315C', border: '1px solid #8DA9C4',
-              borderRadius: '6px', padding: '5px 12px',
+              borderRadius: '6px', padding: isMobile ? '8px' : '5px 12px',
               color: '#fff', fontSize: '12px',
               cursor: refreshing ? 'not-allowed' : 'pointer',
               opacity: refreshing ? 0.6 : 1,
@@ -64,7 +68,7 @@ export default function Header({ onRefresh, lastUpdated, refreshing }: Props) {
             <span style={{ display: 'inline-block', animation: refreshing ? 'spin .8s linear infinite' : 'none' }}>
               🔄
             </span>
-            {refreshing ? '갱신 중...' : '새로고침'}
+            {!isMobile && (refreshing ? '갱신 중...' : '새로고침')}
           </button>
         )}
 
@@ -74,16 +78,22 @@ export default function Header({ onRefresh, lastUpdated, refreshing }: Props) {
             {session.user.image && (
               <img src={session.user.image} alt="" width={26} height={26} style={{ borderRadius: '50%' }} />
             )}
-            <span style={{ fontSize: '12px', color: '#fff' }}>{session.user.name}</span>
+            {!isMobile && <span style={{ fontSize: '12px', color: '#fff' }}>{session.user.name}</span>}
             <button
               onClick={() => signOut()}
-              style={{ background: 'none', border: '1px solid #8DA9C4', color: '#fff', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', cursor: 'pointer' }}
+              style={{
+                background: 'none', border: '1px solid #8DA9C4', color: '#fff', borderRadius: '6px',
+                padding: isMobile ? '6px 8px' : '5px 10px', fontSize: isMobile ? '10px' : '11px', cursor: 'pointer',
+              }}
             >로그아웃</button>
           </div>
         ) : (
           <button
             onClick={() => signIn('google')}
-            style={{ background: '#fff', border: 'none', color: '#0B2545', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+            style={{
+              background: '#fff', border: 'none', color: '#0B2545', borderRadius: '6px',
+              padding: isMobile ? '6px 10px' : '6px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+            }}
           >Google 로그인</button>
         )}
       </div>

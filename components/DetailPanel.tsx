@@ -8,6 +8,7 @@ interface Props {
   floorsLoading: boolean;
   unit: Unit;
   onClose: () => void;
+  isMobile?: boolean;
 }
 
 const lbl = (t: string) => (
@@ -26,22 +27,28 @@ const valPending = (v: string | number | null, unit = '') => (
   </div>
 );
 
-export default function DetailPanel({ center, floors, floorsLoading, unit, onClose }: Props) {
+export default function DetailPanel({ center, floors, floorsLoading, unit, onClose, isMobile }: Props) {
   const dot = center ? (STATUS_COLOR[center.status] ?? '#94a3b8') : '#94a3b8';
   const tm  = center ? (TEMP_META[center.temp_type] ?? TEMP_META['상온']) : TEMP_META['상온'];
 
   return (
     <div style={{
-      position: 'absolute', top: 0, right: 0,
-      width: '340px', height: '100%',
       background: '#fff',
-      borderLeft: '1px solid #E5E9F0',
-      boxShadow: '-4px 0 20px rgba(0,0,0,0.1)',
-      zIndex: 20, overflowY: 'auto',
+      zIndex: isMobile ? 40 : 20, overflowY: 'auto',
       display: 'flex', flexDirection: 'column',
-      transform: center ? 'translateX(0)' : 'translateX(100%)',
       transition: 'transform 0.25s ease',
       pointerEvents: center ? 'auto' : 'none',
+      ...(isMobile ? {
+        // main의 overflow:hidden을 우회하도록 fixed 사용(뷰포트 기준으로 붙어 클리핑 안 받음)
+        position: 'fixed', inset: 0, width: '100%', height: '100%',
+        boxShadow: '0 -4px 20px rgba(0,0,0,0.15)',
+        transform: center ? 'translateY(0)' : 'translateY(100%)',
+      } : {
+        position: 'absolute', top: 0, right: 0, width: '340px', height: '100%',
+        borderLeft: '1px solid #E5E9F0',
+        boxShadow: '-4px 0 20px rgba(0,0,0,0.1)',
+        transform: center ? 'translateX(0)' : 'translateX(100%)',
+      }),
     }}>
       {center && <>
         {/* 헤더 */}
@@ -55,8 +62,8 @@ export default function DetailPanel({ center, floors, floorsLoading, unit, onClo
             </div>
             <button onClick={onClose} style={{
               border: 'none', background: '#F5F7FA', borderRadius: '6px',
-              width: '28px', height: '28px', cursor: 'pointer',
-              fontSize: '14px', color: '#64748b', flexShrink: 0,
+              width: isMobile ? '44px' : '28px', height: isMobile ? '44px' : '28px', cursor: 'pointer',
+              fontSize: isMobile ? '18px' : '14px', color: '#64748b', flexShrink: 0,
             }}>✕</button>
           </div>
           <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>

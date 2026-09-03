@@ -46,6 +46,13 @@ export default function MapLayout() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
+  // 모바일에서 핀/검색결과를 선택하면 필터 드로어를 자동으로 닫아 상세 패널과
+  // 동시에 열려있지 않도록 함(DetailPanel이 더 높은 zIndex라 필수는 아니지만 인터랙션을 깔끔하게 함)
+  const handleSelect = useCallback((id: string | null) => {
+    setSelectedId(id);
+    if (isMobile && id) setSidebarOpen(false);
+  }, [isMobile]);
+
   const loadData = useCallback(async (silent = false, force = false) => {
     if (silent) { setRefreshing(true); }
     else        { setDataLoading(true); }
@@ -138,6 +145,7 @@ export default function MapLayout() {
         onRefresh={() => loadData(true, true)}
         lastUpdated={lastUpdated}
         refreshing={refreshing}
+        isMobile={isMobile}
       />
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
@@ -159,7 +167,7 @@ export default function MapLayout() {
             search={search} onSearch={setSearch}
             suggestions={suggestions}
             onSuggestionSelect={id => {
-              setSelectedId(id);
+              handleSelect(id);
               setSearch(centers.find(c => c.id === id)?.name ?? '');
             }}
             tempFilter={tempFilter} onTempFilter={setTempFilter}
@@ -170,7 +178,8 @@ export default function MapLayout() {
             floorMin={floorMin} onFloorMin={setFloorMin}
             availableOnly={availableOnly} onAvailableOnly={setAvailableOnly}
             unit={unit}
-            selectedId={selectedId} onSelect={setSelectedId}
+            selectedId={selectedId} onSelect={handleSelect}
+            isMobile={isMobile}
           />
         </div>
 
@@ -219,8 +228,9 @@ export default function MapLayout() {
             unit={unit}
             onUnit={setUnit}
             selectedId={selectedId}
-            onSelect={setSelectedId}
+            onSelect={handleSelect}
             onReady={() => setMapReady(true)}
+            isMobile={isMobile}
           />
           <Legend />
           <DetailPanel
@@ -229,6 +239,7 @@ export default function MapLayout() {
             floorsLoading={floorsLoading}
             unit={unit}
             onClose={() => setSelectedId(null)}
+            isMobile={isMobile}
           />
         </main>
       </div>

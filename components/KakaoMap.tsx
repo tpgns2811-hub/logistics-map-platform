@@ -14,6 +14,7 @@ interface Props {
   selectedId:  string | null;
   onSelect:    (id: string | null) => void;
   onReady?:    () => void;
+  isMobile?:   boolean;
 }
 
 /* ── 지도 버전(맵타입) ── */
@@ -190,7 +191,7 @@ function clusterPinHTML(temp: TempCounts, label: string): string {
     </div>`;
 }
 
-export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId, onSelect, onReady }: Props) {
+export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId, onSelect, onReady, isMobile }: Props) {
   const mapRef        = useRef<HTMLDivElement>(null);
   const mapInst       = useRef<any>(null);
   const overlays      = useRef<Record<string, OverlayData>>({});
@@ -199,12 +200,14 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
   const inited        = useRef(false);
   const selectedIdRef = useRef<string | null>(selectedId);
   const unitRef       = useRef<Unit>(unit);
+  const isMobileRef   = useRef<boolean>(!!isMobile);
   const filteredRef   = useRef<LogisticsCenter[]>(centers);
   const centerByIdRef = useRef<Record<string, LogisticsCenter>>({});
   const [mapType, setMapType] = useState<MapTypeKey>('ROADMAP');
 
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
   useEffect(() => { unitRef.current = unit; }, [unit]);
+  useEffect(() => { isMobileRef.current = !!isMobile; }, [isMobile]);
 
   useEffect(() => {
     const src = allCenters ?? centers;
@@ -243,7 +246,7 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
       el.style.transform = 'scale(1.15)';
       el.style.transition = 'transform .15s ease';
       overlays.current[c.id]?.ov.setZIndex(Z_HOVER); // 미리보기 가림 방지: 최상단
-      if (selectedIdRef.current !== c.id) popup.style.display = 'block';
+      if (selectedIdRef.current !== c.id && !isMobileRef.current) popup.style.display = 'block';
     });
     el.addEventListener('mouseout', (e: MouseEvent) => {
       if (el.contains(e.relatedTarget as Node)) return;
@@ -480,7 +483,7 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
       const sel = id === selectedId;
       pin.innerHTML = pinHTML(center, sel);
       ov.setZIndex(sel ? 10 : 1);
-      popup.style.display = sel ? 'block' : 'none';
+      popup.style.display = sel && !isMobileRef.current ? 'block' : 'none';
     });
 
     if (!selectedId) return;
@@ -492,7 +495,7 @@ export default function KakaoMap({ centers, allCenters, unit, onUnit, selectedId
     o.pin.innerHTML = pinHTML(c, true);
     o.ov.setZIndex(10);
     o.popup.innerHTML = popupHTML(c, unitRef.current);
-    o.popup.style.display = 'block';
+    o.popup.style.display = isMobileRef.current ? 'none' : 'block';
     map.panTo(new window.kakao.maps.LatLng(c.latitude, c.longitude));
   }, [selectedId]);
 
